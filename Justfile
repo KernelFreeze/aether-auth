@@ -1,4 +1,4 @@
-app_name := "aether-auth"
+app_image := "localhost/aether-auth:latest"
 
 build:
     mkdir -p bin
@@ -10,11 +10,11 @@ run:
 test:
     go test -v ./...
 
-docker-build:
-    docker build -t {{app_name}} .
+podman-build:
+    podman build -t {{app_image}} -f Containerfile .
 
-docker-run:
-    docker compose up -d
+podman-run:
+    podman compose -f podman-compose.yml up -d
 
 dev:
     air

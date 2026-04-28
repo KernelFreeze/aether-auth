@@ -1,41 +1,37 @@
-version: "3.8"
-
 services:
   app:
+    image: localhost/aether-auth:latest
     env_file:
       - .env
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: Containerfile
     ports:
-      - "${SERVER_PORT}:${SERVER_PORT}"
+      - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
     depends_on:
       - postgres
       - mongodb
       - redis
     environment:
-      # Server
-      - SERVER_PORT=${SERVER_PORT}
-      - SERVER_ENV=${SERVER_ENV}
-
-      # Database
-      - DB_HOST=${DB_HOST}
-      - DB_PORT=${DB_PORT}
-      - DB_USER=${DB_USER}
-      - DB_PASSWORD=${DB_PASSWORD}
-      - DB_NAME=${DB_NAME}
-      - DB_SSL_MODE=${DB_SSL_MODE}
-
-      # Redis
-      - REDIS_ADDR=${REDIS_ADDR}
-      - REDIS_PASSWORD=${REDIS_PASSWORD}
-      - REDIS_DB=${REDIS_DB}
+      SERVER_PORT: ${SERVER_PORT:-8080}
+      SERVER_ENV: ${SERVER_ENV:-development}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      DB_NAME: ${DB_NAME}
+      DB_SSL_MODE: ${DB_SSL_MODE:-disable}
+      REDIS_ADDR: redis:6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      REDIS_DB: ${REDIS_DB:-0}
+    volumes:
+      - ./.env:/app/.env:Z,ro
     networks:
       - app-network
     restart: unless-stopped
 
   postgres:
-    image: postgres:17-alpine
+    image: docker.io/library/postgres:17-alpine
     environment:
       - POSTGRES_USER=${DB_USER}
       - POSTGRES_PASSWORD=${DB_PASSWORD}
@@ -49,7 +45,7 @@ services:
     restart: unless-stopped
 
   mongodb:
-    image: mongo:7.0.5
+    image: docker.io/library/mongo:7.0.5
     ports:
       - "${MONGODB_PORT}:27017"
     volumes:
@@ -59,7 +55,7 @@ services:
     restart: unless-stopped
 
   redis:
-    image: redis:alpine
+    image: docker.io/library/redis:alpine
     ports:
       - "6379:6379"
     volumes:

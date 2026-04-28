@@ -21,9 +21,10 @@ This project implements authentication and identity flows including **OAuth2**, 
 
 Ensure you have the following installed:
 
-- [Go](https://go.dev/doc/install) (1.18+ recommended)
+- [Go](https://go.dev/doc/install) (1.22+ recommended)
 - [PostgreSQL](https://www.postgresql.org/download/)
 - [Redis](https://redis.io/download/)
+- [Podman](https://podman.io/) (optional, for containers)
 
 ### Installation
 
@@ -55,10 +56,19 @@ Ensure you have the following installed:
 5. Start the server:
 
    ```bash
-   go run main.go
+   go run cmd/api/main.go
    ```
 
    The server should be running at **http://localhost:8080**
+
+### Podman
+
+Build and run the containerized stack:
+
+```bash
+just podman-build
+just podman-run
+```
 
 ---
 
@@ -95,7 +105,7 @@ Ensure you have the following installed:
 - **Gin** - HTTP framework
 - **GORM** - ORM for PostgreSQL
 - **Redis** - In-memory caching
-- **Docker** - Containerization (optional)
+- **Podman** - Containerization (optional)
 
 ---
 
