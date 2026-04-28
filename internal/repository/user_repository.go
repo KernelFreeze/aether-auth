@@ -4,7 +4,7 @@ import (
 	"context"
 	"errors"
 
-	"github.com/hokamsingh/go-backend-template/internal/models"
+	"github.com/KernelFreeze/aether-auth/internal/models"
 	"gorm.io/gorm"
 )
 

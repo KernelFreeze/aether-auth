@@ -5,7 +5,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
-	"github.com/hokamsingh/go-backend-template/internal/service"
+	"github.com/KernelFreeze/aether-auth/internal/service"
 )
 
 type UserController struct {

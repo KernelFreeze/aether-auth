@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Go Backend Template</title>
+    <title>Aether Auth</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
       /* Custom CSS for glass morphism effect */
@@ -25,15 +25,22 @@
   <body class="text-gray-900 font-sans">
     <div class="container mx-auto px-4 py-8">
       <h1 class="text-4xl font-bold text-center mb-8 text-white">
-        Go Backend Template
+        Aether Auth
       </h1>
       <p class="text-lg text-center mb-8 text-white">
-        A scalable backend boilerplate built with
+        Aether Auth implements an auth microservice built with
         <strong class="text-blue-400">Go</strong>,
         <strong class="text-blue-400">Gin</strong>,
         <strong class="text-blue-400">GORM</strong>,
         <strong class="text-blue-400">PostgreSQL</strong>, and
         <strong class="text-blue-400">Redis</strong>.
+      </p>
+      <p class="text-lg text-center mb-8 text-white">
+        This project implements authentication and identity flows including
+        <strong class="text-blue-400">OAuth2</strong>,
+        <strong class="text-blue-400">OIDC</strong>,
+        <strong class="text-blue-400">Passkeys</strong>, and related auth
+        service capabilities.
       </p>
 
       <div class="glassy-card p-6 mb-8">
@@ -87,8 +94,8 @@
             Clone the repository:
             <pre
               class="bg-gray-800 p-4 rounded-md mt-2 text-white"
-            ><code>git clone https://github.com/hokamsingh/go-backend-template.git
-cd go-backend-template</code></pre>
+            ><code>git clone git@github.com:KernelFreeze/aether-auth.git
+cd aether-auth</code></pre>
           </li>
           <li>
             Create a <code>.env</code> file and configure database credentials:
@@ -150,61 +157,16 @@ cd go-backend-template</code></pre>
       <hr class="my-8 border-gray-300" />
 
       <div class="glassy-card p-6 mb-8">
-        <h2 class="text-2xl font-semibold mb-4 text-white">📡 API Endpoints</h2>
-        <div class="overflow-x-auto">
-          <table class="min-w-full bg-gray-800 text-white">
-            <thead>
-              <tr>
-                <th class="py-2 px-4 border-b border-gray-700">Method</th>
-                <th class="py-2 px-4 border-b border-gray-700">Endpoint</th>
-                <th class="py-2 px-4 border-b border-gray-700">Description</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr>
-                <td class="py-2 px-4 border-b border-gray-700">GET</td>
-                <td class="py-2 px-4 border-b border-gray-700">
-                  <code>/api/users</code>
-                </td>
-                <td class="py-2 px-4 border-b border-gray-700">
-                  Get all users
-                </td>
-              </tr>
-              <tr>
-                <td class="py-2 px-4 border-b border-gray-700">POST</td>
-                <td class="py-2 px-4 border-b border-gray-700">
-                  <code>/api/users</code>
-                </td>
-                <td class="py-2 px-4 border-b border-gray-700">
-                  Create a user
-                </td>
-              </tr>
-              <tr>
-                <td class="py-2 px-4 border-b border-gray-700">GET</td>
-                <td class="py-2 px-4 border-b border-gray-700">
-                  <code>/api/users/:id</code>
-                </td>
-                <td class="py-2 px-4 border-b border-gray-700">
-                  Get user by ID
-                </td>
-              </tr>
-              <tr>
-                <td class="py-2 px-4 border-b border-gray-700">PUT</td>
-                <td class="py-2 px-4 border-b border-gray-700">
-                  <code>/api/users/:id</code>
-                </td>
-                <td class="py-2 px-4 border-b border-gray-700">Update user</td>
-              </tr>
-              <tr>
-                <td class="py-2 px-4 border-b border-gray-700">DELETE</td>
-                <td class="py-2 px-4 border-b border-gray-700">
-                  <code>/api/users/:id</code>
-                </td>
-                <td class="py-2 px-4 border-b border-gray-700">Delete user</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+        <h2 class="text-2xl font-semibold mb-4 text-white">
+          📡 Auth Capabilities
+        </h2>
+        <ul class="list-disc list-inside space-y-2 text-white">
+          <li>OAuth2 authorization flows</li>
+          <li>OIDC identity provider support</li>
+          <li>Passkey-based authentication</li>
+          <li>Session and token management</li>
+          <li>Auth service APIs for applications</li>
+        </ul>
       </div>
 
       <hr class="my-8 border-gray-300" />
@@ -247,12 +209,7 @@ cd go-backend-template</code></pre>
       <div class="glassy-card p-6 mb-8">
         <h3 class="text-2xl font-semibold mb-4 text-white">🎯 Author</h3>
         <p class="text-white">
-          Developed by <strong>Hokam Singh</strong> with ❤️. Connect on
-          <a
-            href="https://github.com/hokamsingh"
-            class="text-blue-400 hover:underline"
-            >GitHub</a
-          >!
+          Aether Auth is maintained by <strong>KernelFreeze</strong>.
         </p>
       </div>
     </div>

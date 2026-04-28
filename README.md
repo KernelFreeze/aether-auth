@@ -1,6 +1,8 @@
-# Go Backend Template
+# Aether Auth
 
-A scalable backend boilerplate built with **Go**, **Gin**, **GORM**, **PostgreSQL**, and **Redis**.
+Aether Auth implements an auth microservice built with **Go**, **Gin**, **GORM**, **PostgreSQL**, and **Redis**.
+
+This project implements authentication and identity flows including **OAuth2**, **OIDC**, **Passkeys**, and related auth service capabilities.
 
 ## 🚀 Features
 
@@ -28,8 +30,8 @@ Ensure you have the following installed:
 1. Clone the repository:
 
    ```bash
-   git clone https://github.com/hokamsingh/go-backend-template.git
-   cd go-backend-template
+   git clone git@github.com:KernelFreeze/aether-auth.git
+   cd aether-auth
    ```
 
 2. Create a `.env` file and configure database credentials:
@@ -77,15 +79,13 @@ Ensure you have the following installed:
 
 ---
 
-## 📡 API Endpoints
+## 📡 Auth Capabilities
 
-| Method | Endpoint       | Description          |
-|--------|---------------|----------------------|
-| GET    | `/api/users`  | Get all users       |
-| POST   | `/api/users`  | Create a user       |
-| GET    | `/api/users/:id` | Get user by ID |
-| PUT    | `/api/users/:id` | Update user  |
-| DELETE | `/api/users/:id` | Delete user  |
+- OAuth2 authorization flows
+- OIDC identity provider support
+- Passkey-based authentication
+- Session and token management
+- Auth service APIs for applications
 
 ---
 
@@ -113,5 +113,4 @@ Contributions are welcome! If you find issues or have improvements, feel free to
 
 ### 🎯 Author
 
-Developed by **Hokam Singh** with ❤️. Connect on [GitHub](https://github.com/hokamsingh)!
-
+Aether Auth is maintained by **KernelFreeze**.

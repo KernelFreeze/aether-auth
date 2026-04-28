@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hokamsingh/go-backend-template/internal/models"
-	"github.com/hokamsingh/go-backend-template/internal/repository"
+	"github.com/KernelFreeze/aether-auth/internal/models"
+	"github.com/KernelFreeze/aether-auth/internal/repository"
 	"golang.org/x/crypto/bcrypt"
 )
 

@@ -1,4 +1,4 @@
-module github.com/hokamsingh/go-backend-template
+module github.com/KernelFreeze/aether-auth
 
 go 1.22.6
 

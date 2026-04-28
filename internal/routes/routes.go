@@ -4,10 +4,10 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	handlers "github.com/hokamsingh/go-backend-template/internal/handlers/user"
-	"github.com/hokamsingh/go-backend-template/internal/middleware"
-	"github.com/hokamsingh/go-backend-template/internal/repository"
-	"github.com/hokamsingh/go-backend-template/internal/service"
+	handlers "github.com/KernelFreeze/aether-auth/internal/handlers/user"
+	"github.com/KernelFreeze/aether-auth/internal/middleware"
+	"github.com/KernelFreeze/aether-auth/internal/repository"
+	"github.com/KernelFreeze/aether-auth/internal/service"
 	"gorm.io/gorm"
 )
 

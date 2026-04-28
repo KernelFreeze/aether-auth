@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"log"
 
-	"github.com/hokamsingh/go-backend-template/internal/config"
+	"github.com/KernelFreeze/aether-auth/internal/config"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 )

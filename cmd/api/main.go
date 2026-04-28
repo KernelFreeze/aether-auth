@@ -9,10 +9,10 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/hokamsingh/go-backend-template/internal/config"
-	"github.com/hokamsingh/go-backend-template/internal/database"
-	"github.com/hokamsingh/go-backend-template/internal/routes"
-	"github.com/hokamsingh/go-backend-template/internal/server"
+	"github.com/KernelFreeze/aether-auth/internal/config"
+	"github.com/KernelFreeze/aether-auth/internal/database"
+	"github.com/KernelFreeze/aether-auth/internal/routes"
+	"github.com/KernelFreeze/aether-auth/internal/server"
 )
 
 func main() {
