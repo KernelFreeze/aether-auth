@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
@@ -31,11 +33,11 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to get DB connection: %v", err)
 	}
-	defer sqlDb.Close()
+	defer closeResource("PostgreSQL", sqlDb.Close)
 
 	// Initialize Redis
 	redisClient := database.GetRedis()
-	defer redisClient.Close()
+	defer closeResource("Redis", redisClient.Close)
 
 	// Setup router
 	router := routes.SetupRouter(db)
@@ -59,14 +61,18 @@ func main() {
 			log.Fatalf("Server shutdown failed: %v", err)
 		}
 
-		redisClient.Close()
-		sqlDb.Close()
 		fmt.Println("Server gracefully stopped")
 	}()
 
 	// Start server
 	port := cfg.Server.Port
-	if err := srv.Start(port); err != nil {
+	if err := srv.Start(port); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		log.Fatalf("Failed to start server: %v", err)
+	}
+}
+
+func closeResource(name string, close func() error) {
+	if err := close(); err != nil {
+		log.Printf("Failed to close %s: %v", name, err)
 	}
 }
