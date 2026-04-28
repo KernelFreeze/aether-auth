@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Go Backend Template</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      /* Custom CSS for glass morphism effect */
+      .glassy-card {
+        background: rgba(255, 255, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border-radius: 12px;
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+      body {
+        background-image: url("https://img.freepik.com/free-photo/glowing-lines-human-heart-3d-shape-dark-background-generative-ai_191095-1435.jpg?t=st=1740144151~exp=1740147751~hmac=598fe023fbf709ff3614545597a07afedf390313244abc8253ed3bdbcf32e1ff&w=1060");
+        background-size: cover;
+        background-position: center;
+        background-attachment: fixed;
+      }
+    </style>
+  </head>
+  <body class="text-gray-900 font-sans">
+    <div class="container mx-auto px-4 py-8">
+      <h1 class="text-4xl font-bold text-center mb-8 text-white">
+        Go Backend Template
+      </h1>
+      <p class="text-lg text-center mb-8 text-white">
+        A scalable backend boilerplate built with
+        <strong class="text-blue-400">Go</strong>,
+        <strong class="text-blue-400">Gin</strong>,
+        <strong class="text-blue-400">GORM</strong>,
+        <strong class="text-blue-400">PostgreSQL</strong>, and
+        <strong class="text-blue-400">Redis</strong>.
+      </p>
+
+      <div class="glassy-card p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-white">🚀 Features</h2>
+        <ul class="list-disc list-inside space-y-2 text-white">
+          <li><strong>RESTful API</strong> using Gin</li>
+          <li><strong>PostgreSQL + Redis</strong> integration</li>
+          <li><strong>Modular service-based architecture</strong></li>
+          <li><strong>Middleware support</strong> (CORS, Logging)</li>
+          <li><strong>Graceful shutdown handling</strong></li>
+          <li><strong>Environment variable configuration</strong></li>
+        </ul>
+      </div>
+
+      <hr class="my-8 border-gray-300" />
+
+      <div class="glassy-card p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-white">
+          📌 Getting Started
+        </h2>
+        <h3 class="text-xl font-semibold mb-2 text-white">Prerequisites</h3>
+        <p class="mb-4 text-white">Ensure you have the following installed:</p>
+        <ul class="list-disc list-inside space-y-2 mb-4 text-white">
+          <li>
+            <a
+              href="https://go.dev/doc/install"
+              class="text-blue-400 hover:underline"
+              >Go</a
+            >
+            (1.18+ recommended)
+          </li>
+          <li>
+            <a
+              href="https://www.postgresql.org/download/"
+              class="text-blue-400 hover:underline"
+              >PostgreSQL</a
+            >
+          </li>
+          <li>
+            <a
+              href="https://redis.io/download/"
+              class="text-blue-400 hover:underline"
+              >Redis</a
+            >
+          </li>
+        </ul>
+
+        <h3 class="text-xl font-semibold mb-2 text-white">Installation</h3>
+        <ol class="list-decimal list-inside space-y-2 text-white">
+          <li>
+            Clone the repository:
+            <pre
+              class="bg-gray-800 p-4 rounded-md mt-2 text-white"
+            ><code>git clone https://github.com/hokamsingh/go-backend-template.git
+cd go-backend-template</code></pre>
+          </li>
+          <li>
+            Create a <code>.env</code> file and configure database credentials:
+            <pre
+              class="bg-gray-800 p-4 rounded-md mt-2 text-white"
+            ><code>cp .env.example .env</code></pre>
+          </li>
+          <li>
+            Install dependencies:
+            <pre
+              class="bg-gray-800 p-4 rounded-md mt-2 text-white"
+            ><code>go mod tidy</code></pre>
+          </li>
+          <li>
+            Run the database migrations (if applicable):
+            <pre
+              class="bg-gray-800 p-4 rounded-md mt-2 text-white"
+            ><code>go run scripts/migrate.go</code></pre>
+          </li>
+          <li>
+            Start the server:
+            <pre
+              class="bg-gray-800 p-4 rounded-md mt-2 text-white"
+            ><code>go run main.go</code></pre>
+            <p class="mt-2 text-white">
+              The server should be running at
+              <strong
+                ><a
+                  href="http://localhost:8080"
+                  class="text-blue-400 hover:underline"
+                  >http://localhost:8080</a
+                ></strong
+              >
+            </p>
+          </li>
+        </ol>
+      </div>
+
+      <hr class="my-8 border-gray-300" />
+
+      <div class="glassy-card p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-white">
+          📂 Project Structure
+        </h2>
+        <pre
+          class="bg-gray-800 p-4 rounded-md text-white"
+        ><code>├── config/          # Configuration files
+├── controllers/     # API Controllers
+├── models/          # Database Models
+├── routes/          # Route Handlers
+├── services/        # Business Logic Layer
+├── database/        # DB Connection & Migrations
+├── middleware/      # Middleware (CORS, Auth, Logging)
+├── templates/       # HTML Templates
+├── main.go          # Entry Point
+└── .env.example     # Environment Config Sample</code></pre>
+      </div>
+
+      <hr class="my-8 border-gray-300" />
+
+      <div class="glassy-card p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-white">📡 API Endpoints</h2>
+        <div class="overflow-x-auto">
+          <table class="min-w-full bg-gray-800 text-white">
+            <thead>
+              <tr>
+                <th class="py-2 px-4 border-b border-gray-700">Method</th>
+                <th class="py-2 px-4 border-b border-gray-700">Endpoint</th>
+                <th class="py-2 px-4 border-b border-gray-700">Description</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="py-2 px-4 border-b border-gray-700">GET</td>
+                <td class="py-2 px-4 border-b border-gray-700">
+                  <code>/api/users</code>
+                </td>
+                <td class="py-2 px-4 border-b border-gray-700">
+                  Get all users
+                </td>
+              </tr>
+              <tr>
+                <td class="py-2 px-4 border-b border-gray-700">POST</td>
+                <td class="py-2 px-4 border-b border-gray-700">
+                  <code>/api/users</code>
+                </td>
+                <td class="py-2 px-4 border-b border-gray-700">
+                  Create a user
+                </td>
+              </tr>
+              <tr>
+                <td class="py-2 px-4 border-b border-gray-700">GET</td>
+                <td class="py-2 px-4 border-b border-gray-700">
+                  <code>/api/users/:id</code>
+                </td>
+                <td class="py-2 px-4 border-b border-gray-700">
+                  Get user by ID
+                </td>
+              </tr>
+              <tr>
+                <td class="py-2 px-4 border-b border-gray-700">PUT</td>
+                <td class="py-2 px-4 border-b border-gray-700">
+                  <code>/api/users/:id</code>
+                </td>
+                <td class="py-2 px-4 border-b border-gray-700">Update user</td>
+              </tr>
+              <tr>
+                <td class="py-2 px-4 border-b border-gray-700">DELETE</td>
+                <td class="py-2 px-4 border-b border-gray-700">
+                  <code>/api/users/:id</code>
+                </td>
+                <td class="py-2 px-4 border-b border-gray-700">Delete user</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <hr class="my-8 border-gray-300" />
+
+      <div class="glassy-card p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-white">
+          🛠 Technologies Used
+        </h2>
+        <ul class="list-disc list-inside space-y-2 text-white">
+          <li><strong>Go</strong> - Core language</li>
+          <li><strong>Gin</strong> - HTTP framework</li>
+          <li><strong>GORM</strong> - ORM for PostgreSQL</li>
+          <li><strong>Redis</strong> - In-memory caching</li>
+          <li><strong>Docker</strong> - Containerization (optional)</li>
+        </ul>
+      </div>
+
+      <hr class="my-8 border-gray-300" />
+
+      <div class="glassy-card p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-white">📝 License</h2>
+        <p class="text-white">
+          This project is licensed under the <strong>MIT License</strong>. Feel
+          free to use and modify it as needed!
+        </p>
+      </div>
+
+      <hr class="my-8 border-gray-300" />
+
+      <div class="glassy-card p-6 mb-8">
+        <h2 class="text-2xl font-semibold mb-4 text-white">🤝 Contributing</h2>
+        <p class="text-white">
+          Contributions are welcome! If you find issues or have improvements,
+          feel free to open an issue or PR.
+        </p>
+      </div>
+
+      <hr class="my-8 border-gray-300" />
+
+      <div class="glassy-card p-6 mb-8">
+        <h3 class="text-2xl font-semibold mb-4 text-white">🎯 Author</h3>
+        <p class="text-white">
+          Developed by <strong>Hokam Singh</strong> with ❤️. Connect on
+          <a
+            href="https://github.com/hokamsingh"
+            class="text-blue-400 hover:underline"
+            >GitHub</a
+          >!
+        </p>
+      </div>
+    </div>
+  </body>
+</html>
