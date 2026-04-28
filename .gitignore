@@ -26,3 +26,9 @@ vendor/
 *.out
 
 tmp/
+
+# Agents
+.claude/
+.codex/
+CLAUDE.md
+AGENTS.md
