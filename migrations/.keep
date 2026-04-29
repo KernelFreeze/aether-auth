@@ -1,0 +1,3 @@
+# Placeholder so the directory is tracked. Migrations live here as
+# NNNNNN_<slug>.up.sql / NNNNNN_<slug>.down.sql, applied by `just migrate-up`
+# (cmd/migrate wraps golang-migrate).

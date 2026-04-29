@@ -1,0 +1,106 @@
+# Example non-secret configuration. Values shown here mirror the defaults
+# baked into internal/platform/config; the project reads everything from the
+# environment (or .env), this file is a living reference for operators.
+#
+# Secrets (pepper, AES key, PASETO local key, PASETO Ed25519 seed, Postgres /
+# Redis / SMTP passwords, OIDC client secrets) are referenced by URI through
+# the *_REF variables and resolved by internal/platform/secrets. The env://
+# scheme is the only one wired up at scaffold time.
+
+server:
+  port: "8080"
+  env: "development"
+  read_timeout: "5s"
+  write_timeout: "10s"
+  shutdown_timeout: "10s"
+
+postgres:
+  host: "localhost"
+  port: "5432"
+  user: "postgres"
+  password_ref: "env://DB_PASSWORD"
+  name: "aether_auth"
+  ssl_mode: "disable"
+
+redis:
+  addr: "localhost:6379"
+  password_ref: "env://REDIS_PASSWORD"
+  db: 0
+
+queue:
+  redis_addr: "localhost:6379"
+  password_ref: "env://QUEUE_REDIS_PASSWORD"
+  db: 1
+  concurrency: 10
+
+mailer:
+  host: "localhost"
+  port: 1025                 # Mailpit / MailHog default
+  from: "noreply@example.com"
+  starttls: false
+
+issuer:
+  url: "https://auth.example.com"
+  base_url: "https://auth.example.com"
+  audiences: ["https://api.example.com"]
+
+argon2:
+  memory_kib: 47104
+  iterations: 1
+  parallelism: 1
+  salt_length: 16
+  key_length: 32
+
+session:
+  access_ttl: "15m"
+  refresh_sliding: "720h"    # 30d
+  refresh_absolute: "2160h"  # 90d
+  partial_session_ttl: "2m"
+  revocation_cache_ttl: "15m"
+
+paseto:
+  rotation_interval: "2160h" # 90d
+  overlap_window: "336h"     # 14d
+
+oauth:
+  code_ttl: "60s"
+  access_ttl: "15m"
+  refresh_ttl: "720h"
+  rotate_refresh: true
+  default_scopes: ["openid", "profile"]
+  require_pkce: true
+
+ratelimits:
+  ip_per_min: 100
+  account_per_min: 10
+  reset_per_min: 5
+
+lockout:
+  failures: 5
+  backoff: ["1m", "5m", "15m", "1h"]
+  captcha_after: 3
+
+hibp:
+  enabled: true
+  base_url: "https://api.pwnedpasswords.com"
+  cache_ttl: "24h"
+
+csrf:
+  cookie: "XSRF-TOKEN"
+  header: "X-XSRF-TOKEN"
+
+cors:
+  origins: ["*"]
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+  headers: ["Authorization", "Content-Type", "X-XSRF-TOKEN"]
+
+audit:
+  sink: "db"
+
+logging:
+  development: false
+  level: "info"
+
+org:
+  default_role: "member"
+  invitation_ttl: "168h"     # 7d

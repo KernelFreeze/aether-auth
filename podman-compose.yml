@@ -10,8 +10,8 @@ services:
       - "${SERVER_PORT:-8080}:${SERVER_PORT:-8080}"
     depends_on:
       - postgres
-      - mongodb
       - redis
+      - mailpit
     environment:
       SERVER_PORT: ${SERVER_PORT:-8080}
       SERVER_ENV: ${SERVER_ENV:-development}
@@ -24,6 +24,11 @@ services:
       REDIS_ADDR: redis:6379
       REDIS_PASSWORD: ${REDIS_PASSWORD}
       REDIS_DB: ${REDIS_DB:-0}
+      QUEUE_REDIS_ADDR: redis:6379
+      QUEUE_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      QUEUE_REDIS_DB: ${QUEUE_REDIS_DB:-1}
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
     volumes:
       - ./.env:/app/.env:Z,ro
     networks:
@@ -37,19 +42,9 @@ services:
       - POSTGRES_PASSWORD=${DB_PASSWORD}
       - POSTGRES_DB=${DB_NAME}
     ports:
-      - "${DB_PORT}:5432"
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    networks:
-      - app-network
-    restart: unless-stopped
-
-  mongodb:
-    image: docker.io/library/mongo:7.0.5
-    ports:
-      - "${MONGODB_PORT}:27017"
-    volumes:
-      - mongodb_data:/data/db
     networks:
       - app-network
     restart: unless-stopped
@@ -64,11 +59,19 @@ services:
       - app-network
     restart: unless-stopped
 
+  mailpit:
+    image: docker.io/axllent/mailpit:latest
+    ports:
+      - "1025:1025"   # SMTP
+      - "8025:8025"   # Web UI
+    networks:
+      - app-network
+    restart: unless-stopped
+
 networks:
   app-network:
     driver: bridge
 
 volumes:
   postgres_data:
-  mongodb_data:
   redis_data:

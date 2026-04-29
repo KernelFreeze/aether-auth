@@ -1,78 +1,127 @@
+// Command api boots the auth service's HTTP listener.
 package main
 
 import (
 	"context"
 	"errors"
-	"fmt"
-	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
 
-	"github.com/KernelFreeze/aether-auth/internal/config"
-	"github.com/KernelFreeze/aether-auth/internal/database"
-	"github.com/KernelFreeze/aether-auth/internal/routes"
+	"go.uber.org/zap"
+
+	"github.com/KernelFreeze/aether-auth/internal/httpapi"
+	"github.com/KernelFreeze/aether-auth/internal/platform/config"
+	"github.com/KernelFreeze/aether-auth/internal/platform/db"
+	"github.com/KernelFreeze/aether-auth/internal/platform/logger"
+	"github.com/KernelFreeze/aether-auth/internal/platform/mailer"
+	"github.com/KernelFreeze/aether-auth/internal/platform/paseto"
+	"github.com/KernelFreeze/aether-auth/internal/platform/queue"
+	platformredis "github.com/KernelFreeze/aether-auth/internal/platform/redis"
+	"github.com/KernelFreeze/aether-auth/internal/platform/secrets"
 	"github.com/KernelFreeze/aether-auth/internal/server"
 )
 
 func main() {
-	// Load configuration
-	cfg, err := config.LoadConfig()
-	if err != nil {
-		log.Fatalf("Failed to load config: %v", err)
-	}
-
-	// init dbs
-	_ = database.InitDatabases(database.NewPostgresConfig(), database.RedisConfig(cfg.Redis))
-
-	// Initialize PostgreSQL
-	db := database.GetPostgres()
-	sqlDb, err := db.DB()
-	if err != nil {
-		log.Fatalf("Failed to get DB connection: %v", err)
-	}
-	defer closeResource("PostgreSQL", sqlDb.Close)
-
-	// Initialize Redis
-	redisClient := database.GetRedis()
-	defer closeResource("Redis", redisClient.Close)
-
-	// Setup router
-	router := routes.SetupRouter(db)
-
-	// Use the server abstraction
-	srv := server.NewServer(router)
-
-	// Handle graceful shutdown
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, os.Interrupt, syscall.SIGTERM)
-	go func() {
-		<-quit
-		fmt.Println("Shutting down server...")
-
-		// Create shutdown context with a timeout
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		// Shutdown services gracefully
-		if err := srv.Shutdown(ctx); err != nil {
-			log.Fatalf("Server shutdown failed: %v", err)
-		}
-
-		fmt.Println("Server gracefully stopped")
-	}()
-
-	// Start server
-	port := cfg.Server.Port
-	if err := srv.Start(port); err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("Failed to start server: %v", err)
+	if err := run(); err != nil {
+		// stderr fallback when zap may not be available yet
+		_, _ = os.Stderr.WriteString(err.Error() + "\n")
+		os.Exit(1)
 	}
 }
 
-func closeResource(name string, close func() error) {
-	if err := close(); err != nil {
-		log.Printf("Failed to close %s: %v", name, err)
+func run() error {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	cfg, err := config.Load(ctx)
+	if err != nil {
+		return err
 	}
+
+	log, err := logger.New(cfg.Logging.Development)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = log.Sync() }()
+
+	sec := secrets.NewMux()
+
+	pool, err := db.Open(ctx, cfg.Postgres, sec)
+	if err != nil {
+		return err
+	}
+	defer pool.Close()
+
+	rdb, err := platformredis.Open(ctx, cfg.Redis, sec)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = rdb.Close() }()
+
+	asynqClient, err := queue.NewClient(ctx, cfg.Queue, sec)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = asynqClient.Close() }()
+
+	mail, err := mailer.New(ctx, cfg.Mailer, sec)
+	if err != nil {
+		return err
+	}
+	defer func() { _ = mail.Close() }()
+
+	if _, err := paseto.NewKeystore(ctx, cfg.PASETO, sec, paseto.Refs{
+		LocalKey:   cfg.Secrets.PASETOLocalKey,
+		PublicSeed: cfg.Secrets.PASETOPublicSeed,
+	}); err != nil {
+		log.Warn("paseto keystore not initialized", zap.Error(err))
+	}
+
+	router := httpapi.NewRouter(httpapi.Deps{
+		Config: cfg,
+		Logger: log,
+	})
+
+	srv := server.NewServer(router, server.Options{
+		ReadTimeout:  cfg.Server.ReadTimeout,
+		WriteTimeout: cfg.Server.WriteTimeout,
+	})
+
+	errCh := make(chan error, 1)
+	go func() {
+		log.Info("api_listening", zap.String("port", cfg.Server.Port))
+		if err := srv.Start(cfg.Server.Port); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- err
+			return
+		}
+		errCh <- nil
+	}()
+
+	select {
+	case <-ctx.Done():
+		log.Info("api_shutdown_signal")
+	case err := <-errCh:
+		if err != nil {
+			return err
+		}
+	}
+
+	shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), shutdownTimeout(cfg))
+	defer shutdownCancel()
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Error("api_shutdown_failed", zap.Error(err))
+		return err
+	}
+	log.Info("api_stopped")
+	return nil
+}
+
+func shutdownTimeout(cfg *config.Config) time.Duration {
+	if cfg.Server.ShutdownTimeout > 0 {
+		return cfg.Server.ShutdownTimeout
+	}
+	return 10 * time.Second
 }

@@ -27,6 +27,8 @@ vendor/
 
 tmp/
 
+docs/
+
 # Agents
 .claude/
 .codex/

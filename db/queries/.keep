@@ -1,0 +1,3 @@
+# Placeholder so the directory is tracked. SQL files added here are consumed
+# by `just sqlc` (config at configs/sqlc.yaml) and produce code under
+# internal/platform/db/sqlc.
