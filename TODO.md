@@ -118,14 +118,14 @@ repository layer.
 - [x] Regenerate sqlc output with `just sqlc`.
 - [x] Add repository wrappers that depend on `sqlc.Queries`, not raw SQL in
   handlers.
-- [ ] Add integration tests behind `//go:build integration` for migrations and
+- [x] Add integration tests behind `//go:build integration` for migrations and
   repository behavior.
 
 Exit criteria:
 
 - [x] `just sqlc` succeeds.
 - [x] `just test` still avoids integration tests.
-- [ ] `just test-integration` covers the first repository batch when Postgres
+- [x] `just test-integration` covers the first repository batch when Postgres
   is available.
 
 ## Stage 3: Platform primitives
