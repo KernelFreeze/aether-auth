@@ -25,7 +25,9 @@ func TestNewKeystoreLoadsKeys(t *testing.T) {
 		"env://SEED":  bytes.Repeat([]byte{0x22}, 32),
 	}
 
-	ks, err := paseto.NewKeystore(context.Background(), config.PASETOConfig{}, sec, paseto.Refs{
+	ks, err := paseto.NewKeystore(context.Background(), config.PASETOConfig{
+		OverlapWindow: time.Hour,
+	}, sec, paseto.Refs{
 		LocalKey:   "env://LOCAL",
 		PublicSeed: "env://SEED",
 	})

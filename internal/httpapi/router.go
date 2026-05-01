@@ -7,6 +7,7 @@ import (
 	"github.com/KernelFreeze/aether-auth/internal/httpapi/handlers"
 	"github.com/KernelFreeze/aether-auth/internal/httpapi/middleware"
 	"github.com/KernelFreeze/aether-auth/internal/platform/config"
+	"github.com/KernelFreeze/aether-auth/internal/platform/keys"
 )
 
 // Deps collects the wiring inputs the router needs. Feature modules will be
@@ -14,6 +15,7 @@ import (
 type Deps struct {
 	Config      *config.Config
 	Logger      *zap.Logger
+	PASETOKeys  keys.Source
 	Modules     FeatureModules
 	Middlewares Middlewares
 }
@@ -35,7 +37,7 @@ func NewRouter(d Deps) *gin.Engine {
 	)
 
 	r.GET("/healthz", handlers.Health())
-	r.GET("/.well-known/paseto-keys", handlers.PASETOKeys())
+	r.GET("/.well-known/paseto-keys", handlers.PASETOKeys(d.PASETOKeys))
 
 	registerFeatureRoutes(r, d.Modules, d.Middlewares)
 

@@ -9,11 +9,15 @@ import (
 	"syscall"
 
 	"github.com/hibiken/asynq"
+	"go.uber.org/zap"
 
 	"github.com/KernelFreeze/aether-auth/internal/platform/config"
+	"github.com/KernelFreeze/aether-auth/internal/platform/keys"
 	"github.com/KernelFreeze/aether-auth/internal/platform/logger"
+	"github.com/KernelFreeze/aether-auth/internal/platform/paseto"
 	"github.com/KernelFreeze/aether-auth/internal/platform/queue"
 	"github.com/KernelFreeze/aether-auth/internal/platform/secrets"
+	"github.com/KernelFreeze/aether-auth/internal/workers"
 )
 
 func main() {
@@ -45,12 +49,34 @@ func run() error {
 		return err
 	}
 
+	keystore, err := paseto.NewKeystore(ctx, cfg.PASETO, sec, paseto.Refs{
+		LocalKey:   cfg.Secrets.PASETOLocalKey,
+		PublicSeed: cfg.Secrets.PASETOPublicSeed,
+	})
+	if err != nil {
+		log.Warn("paseto keystore not initialized", zap.Error(err))
+	}
+
+	scheduler, err := queue.NewScheduler(ctx, cfg.Queue, sec)
+	if err != nil {
+		return err
+	}
+
 	mux := asynq.NewServeMux()
 	// Task handlers are registered here as they come online:
 	// mux.HandleFunc(queue.TypeEmailSend, workers.HandleEmailSend(...))
 	// mux.HandleFunc(queue.TypeAuditShip, workers.HandleAuditShip(...))
-	// mux.HandleFunc(queue.TypeKeyRotation, workers.HandleKeyRotation(...))
 	// mux.HandleFunc(queue.TypeExpiredCleanup, workers.HandleExpiredCleanup(...))
+	if keystore != nil {
+		mux.HandleFunc(queue.TypeKeyRotation, workers.HandleKeyRotation(keystore, log))
+		if _, err := keys.RegisterRotationSchedule(scheduler, cfg.PASETO); err != nil {
+			return err
+		}
+		if err := scheduler.Start(); err != nil {
+			return err
+		}
+		defer scheduler.Shutdown()
+	}
 
 	go func() {
 		<-ctx.Done()

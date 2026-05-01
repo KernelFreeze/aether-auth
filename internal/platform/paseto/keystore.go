@@ -12,6 +12,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	gopaseto "aidanwoods.dev/go-paseto"
 
@@ -33,6 +34,8 @@ var (
 	// does not know how to verify.
 	ErrUnknownKeyID = errors.New("paseto: unknown key id")
 )
+
+const defaultOverlapWindow = 14 * 24 * time.Hour
 
 // Rule is a PASETO claim validation rule.
 type Rule = gopaseto.Rule
@@ -77,8 +80,10 @@ type Refs struct {
 // PublicKey is the active or retained v4.public verification key. The key is
 // raw Ed25519 public-key bytes.
 type PublicKey struct {
-	KeyID string
-	Key   []byte
+	KeyID       string
+	Key         []byte
+	Active      bool
+	RetainUntil time.Time
 }
 
 // IssueRequest contains claims and implicit assertion data for a new token.
@@ -107,10 +112,8 @@ func (k *Keystore) Reload(ctx context.Context) error {
 	k.mu.Lock()
 	defer k.mu.Unlock()
 
-	verification := make(map[string]publicKey, len(k.verification)+1)
-	for kid, key := range k.verification {
-		verification[kid] = key
-	}
+	now := time.Now()
+	verification := k.retainedPublicKeys(now, signing.KeyID)
 	verification[signing.KeyID] = signing.publicKey
 
 	k.local = local
@@ -127,14 +130,40 @@ func (k *Keystore) PublicKeys() []PublicKey {
 	keys := make([]PublicKey, 0, len(k.verification))
 	for _, key := range k.verification {
 		keys = append(keys, PublicKey{
-			KeyID: key.KeyID,
-			Key:   append([]byte(nil), key.Bytes...),
+			KeyID:       key.KeyID,
+			Key:         append([]byte(nil), key.Bytes...),
+			Active:      key.KeyID == k.signing.KeyID,
+			RetainUntil: key.RetainUntil,
 		})
 	}
 	sort.Slice(keys, func(i, j int) bool {
 		return keys[i].KeyID < keys[j].KeyID
 	})
 	return keys
+}
+
+func (k *Keystore) retainedPublicKeys(now time.Time, activeKeyID string) map[string]publicKey {
+	if k.verification == nil {
+		return make(map[string]publicKey, 1)
+	}
+
+	overlap := k.cfg.OverlapWindow
+	if overlap <= 0 {
+		overlap = defaultOverlapWindow
+	}
+	retained := make(map[string]publicKey, len(k.verification)+1)
+	for kid, key := range k.verification {
+		if kid == activeKeyID {
+			continue
+		}
+		if key.RetainUntil.IsZero() {
+			key.RetainUntil = now.Add(overlap)
+		}
+		if key.RetainUntil.After(now) {
+			retained[kid] = key
+		}
+	}
+	return retained
 }
 
 // IssueAccessToken signs claims as a PASETO v4.public token. The footer carries
@@ -353,9 +382,10 @@ type signingKey struct {
 }
 
 type publicKey struct {
-	KeyID string
-	Key   gopaseto.V4AsymmetricPublicKey
-	Bytes []byte
+	KeyID       string
+	Key         gopaseto.V4AsymmetricPublicKey
+	Bytes       []byte
+	RetainUntil time.Time
 }
 
 type localKey struct {

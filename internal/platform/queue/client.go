@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/hibiken/asynq"
 
@@ -45,6 +46,18 @@ func NewServer(ctx context.Context, cfg config.QueueConfig, sec secrets.Provider
 		},
 	})
 	return srv, nil
+}
+
+// NewScheduler constructs an Asynq scheduler on the same Redis database as the
+// worker queue.
+func NewScheduler(ctx context.Context, cfg config.QueueConfig, sec secrets.Provider) (*asynq.Scheduler, error) {
+	opt, err := redisOpt(ctx, cfg, sec)
+	if err != nil {
+		return nil, err
+	}
+	return asynq.NewScheduler(opt, &asynq.SchedulerOpts{
+		Location: time.UTC,
+	}), nil
 }
 
 func redisOpt(ctx context.Context, cfg config.QueueConfig, sec secrets.Provider) (asynq.RedisClientOpt, error) {

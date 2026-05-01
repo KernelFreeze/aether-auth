@@ -142,10 +142,10 @@ Exit criteria:
   - [x] Issue and verify v4.public access tokens.
   - [x] Issue and verify v4.local partial-session tokens.
   - [x] Support `kid` footers and implicit assertions.
-- [ ] Finish `internal/platform/keys`:
-  - [ ] Public key endpoint format for `/.well-known/paseto-keys`.
-  - [ ] Key rotation schedule and overlap window.
-  - [ ] Worker task or cron registration for rotation.
+- [x] Finish `internal/platform/keys`:
+  - [x] Public key endpoint format for `/.well-known/paseto-keys`.
+  - [x] Key rotation schedule and overlap window.
+  - [x] Worker task or cron registration for rotation.
 - [ ] Finish `internal/platform/httpx`:
   - [ ] Problem response helpers.
   - [ ] Generic auth failure helpers.
@@ -165,7 +165,7 @@ Exit criteria:
 
 - [x] Crypto helpers have table-driven tests and invalid-input tests.
 - [x] PASETO keystore is no longer a stub.
-- [ ] The public key endpoint returns active verification keys.
+- [x] The public key endpoint returns active verification keys.
 
 ## Stage 4: Account and credential core
 

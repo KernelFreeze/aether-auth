@@ -73,16 +73,18 @@ func run() error {
 	}
 	defer func() { _ = mail.Close() }()
 
-	if _, err := paseto.NewKeystore(ctx, cfg.PASETO, sec, paseto.Refs{
+	keystore, err := paseto.NewKeystore(ctx, cfg.PASETO, sec, paseto.Refs{
 		LocalKey:   cfg.Secrets.PASETOLocalKey,
 		PublicSeed: cfg.Secrets.PASETOPublicSeed,
-	}); err != nil {
+	})
+	if err != nil {
 		log.Warn("paseto keystore not initialized", zap.Error(err))
 	}
 
 	router := httpapi.NewRouter(httpapi.Deps{
-		Config: cfg,
-		Logger: log,
+		Config:     cfg,
+		Logger:     log,
+		PASETOKeys: keystore,
 	})
 
 	srv := server.NewServer(router, server.Options{

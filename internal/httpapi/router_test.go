@@ -7,6 +7,7 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/KernelFreeze/aether-auth/internal/httpapi"
+	"github.com/KernelFreeze/aether-auth/internal/platform/paseto"
 	"github.com/KernelFreeze/aether-auth/internal/testutil"
 )
 
@@ -55,6 +56,42 @@ func TestNewRouterServesScaffoldEndpoints(t *testing.T) {
 			testutil.DecodeJSON(t, rec.Body, &body)
 			assertJSONValue(t, body[tt.wantKey], tt.wantValue)
 		})
+	}
+}
+
+func TestNewRouterServesPasetoPublicKeys(t *testing.T) {
+	testutil.SetGinTestMode(t)
+
+	router := httpapi.NewRouter(httpapi.Deps{
+		Config: testutil.Config(),
+		Logger: testutil.Logger(t),
+		PASETOKeys: keySource{keys: []paseto.PublicKey{
+			{
+				KeyID:  "kid-1",
+				Key:    []byte("12345678901234567890123456789012"),
+				Active: true,
+			},
+		}},
+	})
+
+	rec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodGet, "/.well-known/paseto-keys", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+	}
+
+	var body struct {
+		Keys []struct {
+			KeyID         string `json:"kid"`
+			PASETOVersion string `json:"paseto_version"`
+			Status        string `json:"status"`
+		} `json:"keys"`
+	}
+	testutil.DecodeJSON(t, rec.Body, &body)
+	if len(body.Keys) != 1 {
+		t.Fatalf("keys length = %d, want 1", len(body.Keys))
+	}
+	if body.Keys[0].KeyID != "kid-1" || body.Keys[0].PASETOVersion != "v4.public" || body.Keys[0].Status != "active" {
+		t.Fatalf("key = %#v, want active v4.public kid-1", body.Keys[0])
 	}
 }
 
@@ -129,4 +166,12 @@ func (m probeModule) RegisterRoutes(r gin.IRouter, _ httpapi.Middlewares) {
 	r.GET("/probe", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"module": m.name})
 	})
+}
+
+type keySource struct {
+	keys []paseto.PublicKey
+}
+
+func (s keySource) PublicKeys() []paseto.PublicKey {
+	return s.keys
 }
