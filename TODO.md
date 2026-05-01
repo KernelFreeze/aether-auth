@@ -56,13 +56,13 @@ orchestrator while still allowing method-specific challenge flows.
   - [x] `Clock`, `RandomReader`, and `IDGenerator` for deterministic tests.
   - [x] `PasswordHasher`, `PasswordPolicy`, and `BreachChecker`.
   - [x] `SecretBox` or `Encryptor` for AES-256-GCM encrypted credential data.
-- [ ] Define typed service errors before handlers exist:
-  - [ ] Internal error kinds for invalid credentials, locked account, expired
+- [x] Define typed service errors before handlers exist:
+  - [x] Internal error kinds for invalid credentials, locked account, expired
     challenge, replayed challenge, malformed input, provider failure,
     insufficient scope, and policy denial.
-  - [ ] Public error mapping with generic login and reset responses.
-  - [ ] `application/problem+json` helpers in `internal/platform/httpx`.
-  - [ ] A stable place for error IDs if Zitadel's `internal/zerrors` model is
+  - [x] Public error mapping with generic login and reset responses.
+  - [x] `application/problem+json` helpers in `internal/platform/httpx`.
+  - [x] A stable place for error IDs if Zitadel's `internal/zerrors` model is
     adapted.
 - [ ] Define module wiring conventions:
   - [ ] Every feature exposes `Module`, `Deps`, `New(deps)`, and
