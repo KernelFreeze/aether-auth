@@ -43,19 +43,19 @@ orchestrator while still allowing method-specific challenge flows.
     agent, and current partial session if present.
   - [x] `AuthResult`: account ID, credential ID, verified factors, MFA status,
     external identity data, audit metadata, and session issue instructions.
-- [ ] Define cross-feature interfaces with small method sets:
-  - [ ] `AccountRepository` for account lookup and state checks.
-  - [ ] `CredentialRepository` for credential lookup, create, update, and
+- [x] Define cross-feature interfaces with small method sets:
+  - [x] `AccountRepository` for account lookup and state checks.
+  - [x] `CredentialRepository` for credential lookup, create, update, and
     last-credential safety checks.
-  - [ ] `ChallengeStore` for WebAuthn, OIDC state, nonce, PKCE, and one-time
+  - [x] `ChallengeStore` for WebAuthn, OIDC state, nonce, PKCE, and one-time
     challenge TTLs.
-  - [ ] `FactorStore` for partial-session factor state.
-  - [ ] `SessionIssuer` for partial and full session creation.
-  - [ ] `AuditWriter` for security events.
-  - [ ] `RateLimiter` for IP, account, and endpoint limits.
-  - [ ] `Clock`, `RandomReader`, and `IDGenerator` for deterministic tests.
-  - [ ] `PasswordHasher`, `PasswordPolicy`, and `BreachChecker`.
-  - [ ] `SecretBox` or `Encryptor` for AES-256-GCM encrypted credential data.
+  - [x] `FactorStore` for partial-session factor state.
+  - [x] `SessionIssuer` for partial and full session creation.
+  - [x] `AuditWriter` for security events.
+  - [x] `RateLimiter` for IP, account, and endpoint limits.
+  - [x] `Clock`, `RandomReader`, and `IDGenerator` for deterministic tests.
+  - [x] `PasswordHasher`, `PasswordPolicy`, and `BreachChecker`.
+  - [x] `SecretBox` or `Encryptor` for AES-256-GCM encrypted credential data.
 - [ ] Define typed service errors before handlers exist:
   - [ ] Internal error kinds for invalid credentials, locked account, expired
     challenge, replayed challenge, malformed input, provider failure,
