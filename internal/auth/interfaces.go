@@ -256,6 +256,27 @@ type RateLimiter interface {
 	CheckRateLimit(context.Context, RateLimitRequest) (RateLimitResult, error)
 }
 
+// DummyPasswordWork runs equivalent password hashing work when a username is
+// missing so public login timing does not reveal account existence.
+type DummyPasswordWork interface {
+	RunDummyPasswordWork(context.Context, DummyPasswordWorkRequest) error
+}
+
+// DummyPasswordWorkRequest contains credential input for a dummy password
+// verification. CredentialInput may contain a plaintext password and must not
+// be logged.
+type DummyPasswordWorkRequest struct {
+	Username        string
+	CredentialInput any
+}
+
+// TimingEqualizer pads account-sensitive operations to a shared minimum
+// duration.
+type TimingEqualizer interface {
+	Started() time.Time
+	Wait(context.Context, time.Time) error
+}
+
 // Clock provides deterministic time in tests.
 type Clock interface {
 	Now() time.Time

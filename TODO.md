@@ -288,13 +288,13 @@ This is the first real `AuthMethod` implementation. Use Zitadel's password
 state-transition tests as references, but keep Aether's NIST/OWASP password
 policy.
 
-- [ ] Implement `internal/auth` orchestrator:
-  - [ ] Register `AuthMethod` implementations by `CredentialKind`.
-  - [ ] Enforce rate limiting before credential verification.
-  - [ ] Normalize public login errors to `invalid_credentials`.
-  - [ ] Run dummy password work for missing accounts.
-  - [ ] Apply timing equalization on success, failure, and lockout paths.
-  - [ ] Emit audit events for success and failure.
+- [x] Implement `internal/auth` orchestrator:
+  - [x] Register `AuthMethod` implementations by `CredentialKind`.
+  - [x] Enforce rate limiting before credential verification.
+  - [x] Normalize public login errors to `invalid_credentials`.
+  - [x] Run dummy password work for missing accounts.
+  - [x] Apply timing equalization on success, failure, and lockout paths.
+  - [x] Emit audit events for success and failure.
 - [ ] Implement `internal/auth/password`:
   - [ ] Password set/change with policy checks.
   - [ ] HIBP k-anonymity breach check with Redis cache.

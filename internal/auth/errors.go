@@ -179,7 +179,7 @@ func PublicErrorFor(err error, ctx PublicErrorContext) PublicError {
 
 	switch ctx {
 	case PublicErrorContextLogin:
-		if kind == ErrorKindInvalidCredentials || kind == ErrorKindLockedAccount {
+		if kind == ErrorKindInvalidCredentials || kind == ErrorKindLockedAccount || kind == ErrorKindPolicyDenied {
 			return PublicError{
 				Status:  http.StatusUnauthorized,
 				Type:    "https://aether-auth.local/problems/invalid-credentials",
