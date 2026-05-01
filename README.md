@@ -1,6 +1,6 @@
 # Aether Auth
 
-Aether Auth is a self-hosted identity and authorization service for Go systems that need more than a login endpoint. It handles account identity, credential verification, MFA, session management, organization membership, OAuth2 consent, and scoped token issuance from one service. It's a reimplementation of Zitadel with my own opinions of how a identity service should behave.
+Aether Auth is a self-hosted identity and authorization service. It handles account identity, credential verification, MFA, session management, organization membership, OAuth2 consent, and scoped token issuance from one service. It's a reimplementation of Zitadel with my own opinions of how a identity service should behave.
 
 The service is built around three ideas:
 
