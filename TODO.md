@@ -154,12 +154,12 @@ Exit criteria:
   - [x] Redis-backed IP, account, and endpoint buckets.
   - [x] Middleware hooks usable before auth verification.
   - [x] Unit tests with fake limiter and integration tests with Redis.
-- [ ] Add test helpers under `internal/testutil`:
-  - [ ] Fake clock.
-  - [ ] Deterministic random reader.
-  - [ ] JSON assertion helper for Gin handlers.
-  - [ ] Config builder with safe defaults.
-  - [ ] Repository integration harness.
+- [x] Add test helpers under `internal/testutil`:
+  - [x] Fake clock.
+  - [x] Deterministic random reader.
+  - [x] JSON assertion helper for Gin handlers.
+  - [x] Config builder with safe defaults.
+  - [x] Repository integration harness.
 
 Exit criteria:
 
