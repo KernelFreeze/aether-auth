@@ -146,10 +146,10 @@ Exit criteria:
   - [x] Public key endpoint format for `/.well-known/paseto-keys`.
   - [x] Key rotation schedule and overlap window.
   - [x] Worker task or cron registration for rotation.
-- [ ] Finish `internal/platform/httpx`:
-  - [ ] Problem response helpers.
-  - [ ] Generic auth failure helpers.
-  - [ ] Timing equalizer helper for login and reset flows.
+- [x] Finish `internal/platform/httpx`:
+  - [x] Problem response helpers.
+  - [x] Generic auth failure helpers.
+  - [x] Timing equalizer helper for login and reset flows.
 - [ ] Finish `internal/ratelimit`:
   - [ ] Redis-backed IP, account, and endpoint buckets.
   - [ ] Middleware hooks usable before auth verification.
