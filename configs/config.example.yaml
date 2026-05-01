@@ -5,7 +5,8 @@
 # Secrets (pepper, AES key, PASETO local key, PASETO Ed25519 seed, Postgres /
 # Redis / SMTP passwords, OIDC client secrets) are referenced by URI through
 # the *_REF variables and resolved by internal/platform/secrets. The env://
-# scheme is the only one wired up at scaffold time.
+# scheme is the only one wired up at scaffold time. PASETO key refs resolve to
+# 32-byte values encoded as raw bytes, hex, or base64 text.
 
 server:
   port: "8080"

@@ -136,12 +136,12 @@ Exit criteria:
   - [x] AES-256-GCM seal/open helpers for credential payloads.
   - [x] CSPRNG helpers with unbiased random string generation.
   - [x] Constant-time comparison helpers where needed.
-- [ ] Finish `internal/platform/paseto`:
-  - [ ] Load Ed25519 signing keys from secret refs.
-  - [ ] Load v4.local symmetric keys from secret refs.
-  - [ ] Issue and verify v4.public access tokens.
-  - [ ] Issue and verify v4.local partial-session tokens.
-  - [ ] Support `kid` footers and implicit assertions.
+- [x] Finish `internal/platform/paseto`:
+  - [x] Load Ed25519 signing keys from secret refs.
+  - [x] Load v4.local symmetric keys from secret refs.
+  - [x] Issue and verify v4.public access tokens.
+  - [x] Issue and verify v4.local partial-session tokens.
+  - [x] Support `kid` footers and implicit assertions.
 - [ ] Finish `internal/platform/keys`:
   - [ ] Public key endpoint format for `/.well-known/paseto-keys`.
   - [ ] Key rotation schedule and overlap window.
@@ -164,7 +164,7 @@ Exit criteria:
 Exit criteria:
 
 - [x] Crypto helpers have table-driven tests and invalid-input tests.
-- [ ] PASETO keystore is no longer a stub.
+- [x] PASETO keystore is no longer a stub.
 - [ ] The public key endpoint returns active verification keys.
 
 ## Stage 4: Account and credential core
