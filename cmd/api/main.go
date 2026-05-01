@@ -12,9 +12,11 @@ import (
 
 	"go.uber.org/zap"
 
+	"github.com/KernelFreeze/aether-auth/internal/account"
 	"github.com/KernelFreeze/aether-auth/internal/httpapi"
 	"github.com/KernelFreeze/aether-auth/internal/platform/config"
 	"github.com/KernelFreeze/aether-auth/internal/platform/db"
+	"github.com/KernelFreeze/aether-auth/internal/platform/db/sqlc"
 	"github.com/KernelFreeze/aether-auth/internal/platform/logger"
 	"github.com/KernelFreeze/aether-auth/internal/platform/mailer"
 	"github.com/KernelFreeze/aether-auth/internal/platform/paseto"
@@ -82,11 +84,22 @@ func run() error {
 		log.Warn("paseto keystore not initialized", zap.Error(err))
 	}
 
+	queries := sqlc.New(pool)
 	rateLimiter := ratelimit.NewRedisChecker(rdb, ratelimit.ConfigFrom(cfg.RateLimits))
 	router := httpapi.NewRouter(httpapi.Deps{
 		Config:     cfg,
 		Logger:     log,
 		PASETOKeys: keystore,
+		Modules: httpapi.FeatureModules{
+			Account: account.New(account.Deps{
+				Profiles: account.NewProfileService(account.ProfileDeps{
+					Store: account.NewSQLProfileStore(queries),
+				}),
+				Credentials: account.NewCredentialService(account.CredentialDeps{
+					Store: account.NewSQLCredentialStore(queries),
+				}),
+			}),
+		},
 		Middlewares: httpapi.Middlewares{
 			RateLimit: ratelimit.NewMiddleware(rateLimiter),
 		},

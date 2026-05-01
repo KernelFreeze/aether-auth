@@ -267,3 +267,35 @@ func (q *Queries) UpdateAccountLockout(ctx context.Context, arg UpdateAccountLoc
 	)
 	return i, err
 }
+
+const updateAccountProfile = `-- name: UpdateAccountProfile :one
+UPDATE accounts
+SET display_name = COALESCE($1, display_name),
+    metadata = COALESCE($2, metadata)
+WHERE id = $3
+RETURNING id, username, username_normalized, display_name, disabled, mfa_required, locked_until, metadata, created_at, updated_at
+`
+
+type UpdateAccountProfileParams struct {
+	DisplayName *string     `json:"display_name"`
+	Metadata    []byte      `json:"metadata"`
+	ID          pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateAccountProfile(ctx context.Context, arg UpdateAccountProfileParams) (Account, error) {
+	row := q.db.QueryRow(ctx, updateAccountProfile, arg.DisplayName, arg.Metadata, arg.ID)
+	var i Account
+	err := row.Scan(
+		&i.ID,
+		&i.Username,
+		&i.UsernameNormalized,
+		&i.DisplayName,
+		&i.Disabled,
+		&i.MfaRequired,
+		&i.LockedUntil,
+		&i.Metadata,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}

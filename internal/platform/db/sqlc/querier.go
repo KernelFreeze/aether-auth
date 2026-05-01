@@ -56,6 +56,7 @@ type Querier interface {
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) (Session, error)
 	RotateRefreshToken(ctx context.Context, arg RotateRefreshTokenParams) (RefreshToken, error)
 	UpdateAccountLockout(ctx context.Context, arg UpdateAccountLockoutParams) (Account, error)
+	UpdateAccountProfile(ctx context.Context, arg UpdateAccountProfileParams) (Account, error)
 	UpdateCredentialLastUsed(ctx context.Context, arg UpdateCredentialLastUsedParams) (Credential, error)
 	UpdateCredentialState(ctx context.Context, arg UpdateCredentialStateParams) (Credential, error)
 	UpdateCredentialStateForAccount(ctx context.Context, arg UpdateCredentialStateForAccountParams) (Credential, error)

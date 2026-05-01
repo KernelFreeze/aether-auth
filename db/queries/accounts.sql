@@ -42,6 +42,13 @@ SET locked_until = sqlc.narg(locked_until)
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
+-- name: UpdateAccountProfile :one
+UPDATE accounts
+SET display_name = COALESCE(sqlc.narg(display_name), display_name),
+    metadata = COALESCE(sqlc.narg(metadata), metadata)
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
 -- name: CreateEmail :one
 INSERT INTO emails (
     id,

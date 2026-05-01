@@ -366,9 +366,6 @@ func (s *CredentialService) ready() error {
 	if s.store == nil {
 		return errors.New("account: credential store is nil")
 	}
-	if s.box == nil {
-		return errors.New("account: credential payload box is nil")
-	}
 	if s.ids == nil {
 		return errors.New("account: credential id generator is nil")
 	}
@@ -396,6 +393,9 @@ type credentialPayloadContext struct {
 }
 
 func (s *CredentialService) sealPayload(ctx context.Context, c credentialPayloadContext, payload any) (CredentialPayload, error) {
+	if s.box == nil {
+		return CredentialPayload{}, errors.New("account: credential payload box is nil")
+	}
 	plaintext, err := json.Marshal(payload)
 	if err != nil {
 		return CredentialPayload{}, fmt.Errorf("account: marshal credential payload: %w", err)
@@ -427,6 +427,9 @@ func (s *CredentialService) sealPayload(ctx context.Context, c credentialPayload
 func (s *CredentialService) openPayload(ctx context.Context, credential Credential) (json.RawMessage, error) {
 	if credential.Payload.Empty() {
 		return nil, nil
+	}
+	if s.box == nil {
+		return nil, errors.New("account: credential payload box is nil")
 	}
 	plaintext, err := s.box.OpenCredentialPayload(ctx, CredentialPayloadOpenRequest{
 		Payload:        credential.Payload,

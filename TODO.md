@@ -266,11 +266,11 @@ Exit criteria:
   - [x] Provider-specific uniqueness for OIDC credentials.
   - [x] Last-credential removal protection.
   - [x] Re-authentication requirement for destructive credential changes.
-- [ ] Add account settings routes:
-  - [ ] Read profile.
-  - [ ] Update display name or profile metadata.
-  - [ ] List credentials without exposing secrets.
-  - [ ] Remove credential when policy allows it.
+- [x] Add account settings routes:
+  - [x] Read profile.
+  - [x] Update display name or profile metadata.
+  - [x] List credentials without exposing secrets.
+  - [x] Remove credential when policy allows it.
 - [ ] Add repository and handler tests:
   - [ ] Duplicate username and duplicate email behavior.
   - [ ] Last credential cannot be removed.
@@ -280,7 +280,7 @@ Exit criteria:
 
 - [x] Accounts and credentials can be created without sessions.
 - [x] Credential payloads are encrypted at rest.
-- [ ] Account APIs are mounted through `internal/httpapi/router.go`.
+- [x] Account APIs are mounted through `internal/httpapi/router.go`.
 
 ## Stage 5: Auth orchestrator and password auth
 
