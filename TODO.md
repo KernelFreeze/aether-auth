@@ -70,17 +70,17 @@ orchestrator while still allowing method-specific challenge flows.
   - [x] `internal/httpapi/router.go` remains the only complete URL map.
   - [x] No feature package reads global config or opens its own DB, Redis,
     mailer, queue, or logger.
-- [ ] Add unit tests for interface-level behavior:
-  - [ ] Fake `AuthMethod` implementations can be registered and called by the
+- [x] Add unit tests for interface-level behavior:
+  - [x] Fake `AuthMethod` implementations can be registered and called by the
     orchestrator.
-  - [ ] Public error mapping never leaks account existence.
-  - [ ] Clock and random fakes make challenge expiry tests deterministic.
+  - [x] Public error mapping never leaks account existence.
+  - [x] Clock and random fakes make challenge expiry tests deterministic.
 
 Exit criteria:
 
-- [ ] A skeleton auth orchestrator can register at least two fake methods.
-- [ ] `just test` passes without external services.
-- [ ] New interfaces are documented enough that password and WebAuthn can be
+- [x] A skeleton auth orchestrator can register at least two fake methods.
+- [x] `just test` passes without external services.
+- [x] New interfaces are documented enough that password and WebAuthn can be
   implemented without changing their shape.
 
 ## Stage 2: Persistence foundation
