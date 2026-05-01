@@ -10,6 +10,92 @@ SPDX headers when present, and a short note in the destination package naming
 the source file. Prefer small ports over importing Zitadel's command/query and
 eventstore architecture.
 
+## Future Hurl HTTP integration plan
+
+Use Go integration tests for repository, transaction, sqlc, Redis, and worker
+internals. Use Hurl for black-box HTTP flows once a stage exposes real routes
+and can run against a migrated local stack. Hurl tests belong with the e2e
+layer, not the fast `just test` unit gate.
+
+- [ ] Add a Hurl harness when the first black-box account route is ready:
+  - [ ] Create `test/e2e/hurl/` with a short README, environment example, and
+    staged flow files such as `stage04-registration.hurl`.
+  - [ ] Add a `just test-hurl` target that runs Hurl against a caller-provided
+    `BASE_URL`, defaulting to the local API port.
+  - [ ] Document the required startup order: podman stack, migrations, API,
+    worker when async mail or cleanup behavior is under test.
+  - [ ] Keep generated account names, emails, passwords, reset tokens, OAuth
+    codes, and session tokens out of source-controlled fixtures.
+- [ ] Stage 4 Hurl flow: account registration and credential API smoke tests.
+  - [ ] Register a valid account after the registration route is mounted.
+  - [ ] Assert the response shape never includes password hashes, encrypted
+    credential payloads, reset tokens, or other secret material.
+  - [ ] Repeat registration with the same username and email and assert the
+    public anti-enumeration contract.
+  - [ ] Exercise credential listing/removal only after Stage 6 can provide an
+    authenticated session for protected account settings routes.
+- [ ] Stage 5 Hurl flow: password login public contract.
+  - [ ] Login with a registered account and assert the common session result
+    shape.
+  - [ ] Compare wrong username, wrong password, inactive account, and lockout
+    responses for the same public error contract.
+  - [ ] Drive enough failures to prove rate limiting or lockout surfaces as the
+    documented public response.
+- [ ] Stage 6 Hurl flow: session lifecycle.
+  - [ ] Login, call an authenticated account endpoint, refresh, and logout.
+  - [ ] Attempt refresh-token reuse and assert the session family is revoked.
+  - [ ] Verify a partial-session token cannot authorize normal account APIs.
+- [ ] Stage 7 Hurl flow: password plus TOTP and recovery-code login.
+  - [ ] Enroll and confirm TOTP, then prove password login returns a partial
+    session until the TOTP factor is verified.
+  - [ ] Use one recovery code successfully and assert replay fails.
+  - [ ] Assert raw TOTP codes and recovery codes never appear in responses.
+- [ ] Stage 8 Hurl flow: WebAuthn HTTP contract.
+  - [ ] Keep successful registration/assertion coverage in Go e2e tests with
+    the adapted virtual WebAuthn client.
+  - [ ] Use Hurl for challenge response shape, malformed payloads, expired
+    challenge, and replay rejection once those routes exist.
+- [ ] Stage 9 Hurl flow: external OIDC callback behavior.
+  - [ ] Run authorize and callback paths against a local mock provider.
+  - [ ] Assert redirect, state, nonce, PKCE, provider-error, and auto-create
+    disabled responses.
+- [ ] Stage 10 Hurl flow: password reset.
+  - [ ] Submit reset requests for known and unknown accounts and assert public
+    response parity.
+  - [ ] Read the captured reset email from the local mail test service, confirm
+    the reset, then assert token replay fails.
+  - [ ] Confirm old sessions stop working after reset.
+- [ ] Stage 11 Hurl flow: OAuth2 authorization server.
+  - [ ] Exercise authorization-code plus PKCE, token exchange, refresh
+    rotation, and consent revoke.
+  - [ ] Assert exact redirect URI matching, scope downscoping, and invalid
+    client behavior through public HTTP responses.
+- [ ] Stage 12 Hurl flow: organization invitation and RBAC.
+  - [ ] Create an organization, invite a user, accept the invitation, and assert
+    membership claims or account-visible membership state.
+  - [ ] Exercise cross-organization access rejection and last-owner protection
+    through public APIs.
+- [ ] Stage 13 Hurl flow: audit-backed account activity.
+  - [ ] Trigger login, reset, session revoke, OAuth, and organization events
+    through HTTP.
+  - [ ] Assert any account-facing recent-activity endpoint shows expected event
+    summaries without raw secrets.
+- [ ] Stage 14 Hurl flow: browser-facing security controls.
+  - [ ] Assert secure headers on rendered login, MFA, reset, consent, sessions,
+    and authorized-apps pages.
+  - [ ] Assert CSRF failures for mutating browser-style requests and `403`
+    responses for insufficient scopes.
+- [ ] Stage 15 Hurl flow: async side effects visible through HTTP.
+  - [ ] Trigger reset and invitation email flows and assert captured mail is
+    produced without sending real email.
+  - [ ] Exercise cleanup-visible behavior, such as expired reset tokens or OAuth
+    codes no longer working after worker cleanup runs.
+- [ ] Stage 16 Hurl gate: include the stable Hurl flows in an optional CI job
+  that runs after the containerized stack and migrations are ready.
+- [ ] Stage 17 Hurl hardening suite: keep anti-enumeration, timing-tolerant
+  response-shape checks, redirect validation, and secret-leak regression tests
+  available for security review.
+
 ## Stage 1: Shared auth contracts and common interfaces
 
 This stage must land before password, WebAuthn, OIDC, TOTP, MFA, sessions, or
