@@ -5,8 +5,7 @@ It owns account identity, credential verification, MFA, sessions, organization
 membership, OAuth2 consent, and scoped token issuance.
 
 This document describes the service contract and the security decisions behind
-it. Package layout, library choices, boot wiring, and local workflows are covered
-in `docs/IMPLEMENTATION.md`.
+it.
 
 ## Status
 
@@ -310,9 +309,3 @@ PATCH  /orgs/{slug}/members/{account_id}
 GET    /.well-known/paseto-keys
 ```
 
-## Documentation boundaries
-
-Update this file when the auth, token, session, OAuth, MFA, organization, audit,
-or browser-security contract changes. Update `docs/IMPLEMENTATION.md` when the
-package layout, boot sequence, commands, testing strategy, or dependency choices
-change.
