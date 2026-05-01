@@ -1,8 +1,6 @@
 # Zitadel reuse list
 
-Files and components from the Zitadel checkout at
-`~/Documents/Development/CelesteLove/zitadel` planned for reuse in Aether.
-See `docs/ZITADEL_REUSE.md` for rationale, porting notes, and what to avoid.
+Files and components from the Zitadel checkout planned for reuse in Aether.
 
 ## WebAuthn and passkeys
 
