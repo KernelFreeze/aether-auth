@@ -255,11 +255,11 @@ Exit criteria:
 
 ## Stage 4: Account and credential core
 
-- [ ] Implement account registration service:
-  - [ ] Username normalization and validation.
-  - [ ] Email normalization, uniqueness, and optional verification state.
-  - [ ] Anti-enumeration behavior when username or email is already taken.
-  - [ ] Audit events for registration attempts.
+- [x] Implement account registration service:
+  - [x] Username normalization and validation.
+  - [x] Email normalization, uniqueness, and optional verification state.
+  - [x] Anti-enumeration behavior when username or email is already taken.
+  - [x] Audit events for registration attempts.
 - [ ] Implement credential management:
   - [ ] Generic credential create, read, update, delete.
   - [ ] Encrypted credential payload serialization.
