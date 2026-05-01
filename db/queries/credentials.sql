@@ -94,6 +94,13 @@ SET last_used_at = sqlc.arg(last_used_at)
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
+-- name: UpdateCredentialState :one
+UPDATE credentials
+SET verified = COALESCE(sqlc.narg(verified), verified),
+    last_used_at = COALESCE(sqlc.narg(last_used_at), last_used_at)
+WHERE id = sqlc.arg(id)
+RETURNING *;
+
 -- name: RevokeCredential :one
 UPDATE credentials
 SET revoked_at = sqlc.arg(revoked_at)

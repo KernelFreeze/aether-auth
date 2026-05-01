@@ -116,7 +116,7 @@ repository layer.
   - [x] Session create, list, revoke, rotate refresh token, and revoke chain.
   - [x] Audit append and recent login query.
 - [x] Regenerate sqlc output with `just sqlc`.
-- [ ] Add repository wrappers that depend on `sqlc.Queries`, not raw SQL in
+- [x] Add repository wrappers that depend on `sqlc.Queries`, not raw SQL in
   handlers.
 - [ ] Add integration tests behind `//go:build integration` for migrations and
   repository behavior.
@@ -124,7 +124,7 @@ repository layer.
 Exit criteria:
 
 - [x] `just sqlc` succeeds.
-- [ ] `just test` still avoids integration tests.
+- [x] `just test` still avoids integration tests.
 - [ ] `just test-integration` covers the first repository batch when Postgres
   is available.
 

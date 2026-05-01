@@ -336,6 +336,39 @@ func (q *Queries) UpdateCredentialLastUsed(ctx context.Context, arg UpdateCreden
 	return i, err
 }
 
+const updateCredentialState = `-- name: UpdateCredentialState :one
+UPDATE credentials
+SET verified = COALESCE($1, verified),
+    last_used_at = COALESCE($2, last_used_at)
+WHERE id = $3
+RETURNING id, account_id, kind, provider, external_subject, display_name, verified, created_at, updated_at, last_used_at, revoked_at
+`
+
+type UpdateCredentialStateParams struct {
+	Verified   *bool              `json:"verified"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	ID         pgtype.UUID        `json:"id"`
+}
+
+func (q *Queries) UpdateCredentialState(ctx context.Context, arg UpdateCredentialStateParams) (Credential, error) {
+	row := q.db.QueryRow(ctx, updateCredentialState, arg.Verified, arg.LastUsedAt, arg.ID)
+	var i Credential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Provider,
+		&i.ExternalSubject,
+		&i.DisplayName,
+		&i.Verified,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const upsertCredentialPayload = `-- name: UpsertCredentialPayload :one
 INSERT INTO credential_payloads (
     credential_id,
