@@ -111,7 +111,7 @@ just podman-run
 
 ## 📝 License
 
-This project is licensed under the **MIT License**. Feel free to use and modify it as needed!
+This project is licensed under the **GNU Affero General Public License v3.0** (AGPL-3.0-only). See [LICENSE](./LICENSE) and [LICENSING.md](./LICENSING.md).
 
 ---
 
