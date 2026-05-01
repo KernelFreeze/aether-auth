@@ -260,12 +260,12 @@ Exit criteria:
   - [x] Email normalization, uniqueness, and optional verification state.
   - [x] Anti-enumeration behavior when username or email is already taken.
   - [x] Audit events for registration attempts.
-- [ ] Implement credential management:
-  - [ ] Generic credential create, read, update, delete.
-  - [ ] Encrypted credential payload serialization.
-  - [ ] Provider-specific uniqueness for OIDC credentials.
-  - [ ] Last-credential removal protection.
-  - [ ] Re-authentication requirement for destructive credential changes.
+- [x] Implement credential management:
+  - [x] Generic credential create, read, update, delete.
+  - [x] Encrypted credential payload serialization.
+  - [x] Provider-specific uniqueness for OIDC credentials.
+  - [x] Last-credential removal protection.
+  - [x] Re-authentication requirement for destructive credential changes.
 - [ ] Add account settings routes:
   - [ ] Read profile.
   - [ ] Update display name or profile metadata.
@@ -278,8 +278,8 @@ Exit criteria:
 
 Exit criteria:
 
-- [ ] Accounts and credentials can be created without sessions.
-- [ ] Credential payloads are encrypted at rest.
+- [x] Accounts and credentials can be created without sessions.
+- [x] Credential payloads are encrypted at rest.
 - [ ] Account APIs are mounted through `internal/httpapi/router.go`.
 
 ## Stage 5: Auth orchestrator and password auth

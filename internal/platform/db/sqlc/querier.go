@@ -32,6 +32,7 @@ type Querier interface {
 	GetAuthChallenge(ctx context.Context, id string) (AuthChallenge, error)
 	GetCredentialByAccountKindProvider(ctx context.Context, arg GetCredentialByAccountKindProviderParams) (Credential, error)
 	GetCredentialByID(ctx context.Context, id pgtype.UUID) (Credential, error)
+	GetCredentialByIDForAccount(ctx context.Context, arg GetCredentialByIDForAccountParams) (Credential, error)
 	GetCredentialByProviderSubject(ctx context.Context, arg GetCredentialByProviderSubjectParams) (Credential, error)
 	GetCredentialPayload(ctx context.Context, credentialID pgtype.UUID) (CredentialPayload, error)
 	GetLoginAttempt(ctx context.Context, arg GetLoginAttemptParams) (LoginAttempt, error)
@@ -49,6 +50,7 @@ type Querier interface {
 	RecordLoginFailure(ctx context.Context, arg RecordLoginFailureParams) (LoginAttempt, error)
 	RecordLoginSuccess(ctx context.Context, arg RecordLoginSuccessParams) (LoginAttempt, error)
 	RevokeCredential(ctx context.Context, arg RevokeCredentialParams) (Credential, error)
+	RevokeCredentialForAccount(ctx context.Context, arg RevokeCredentialForAccountParams) (Credential, error)
 	RevokeRefreshToken(ctx context.Context, arg RevokeRefreshTokenParams) (RefreshToken, error)
 	RevokeRefreshTokenChain(ctx context.Context, arg RevokeRefreshTokenChainParams) ([]RefreshToken, error)
 	RevokeSession(ctx context.Context, arg RevokeSessionParams) (Session, error)
@@ -56,6 +58,7 @@ type Querier interface {
 	UpdateAccountLockout(ctx context.Context, arg UpdateAccountLockoutParams) (Account, error)
 	UpdateCredentialLastUsed(ctx context.Context, arg UpdateCredentialLastUsedParams) (Credential, error)
 	UpdateCredentialState(ctx context.Context, arg UpdateCredentialStateParams) (Credential, error)
+	UpdateCredentialStateForAccount(ctx context.Context, arg UpdateCredentialStateForAccountParams) (Credential, error)
 	UpsertCredentialPayload(ctx context.Context, arg UpsertCredentialPayloadParams) (CredentialPayload, error)
 	UpsertSessionUserAgent(ctx context.Context, arg UpsertSessionUserAgentParams) (SessionUserAgent, error)
 }

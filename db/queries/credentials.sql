@@ -23,6 +23,13 @@ SELECT *
 FROM credentials
 WHERE id = sqlc.arg(id);
 
+-- name: GetCredentialByIDForAccount :one
+SELECT *
+FROM credentials
+WHERE id = sqlc.arg(id)
+  AND account_id = sqlc.arg(account_id)
+  AND revoked_at IS NULL;
+
 -- name: ListCredentialsByAccount :many
 SELECT *
 FROM credentials
@@ -101,9 +108,32 @@ SET verified = COALESCE(sqlc.narg(verified), verified),
 WHERE id = sqlc.arg(id)
 RETURNING *;
 
+-- name: UpdateCredentialStateForAccount :one
+UPDATE credentials
+SET verified = COALESCE(sqlc.narg(verified), verified),
+    last_used_at = COALESCE(sqlc.narg(last_used_at), last_used_at)
+WHERE id = sqlc.arg(id)
+  AND account_id = sqlc.arg(account_id)
+  AND revoked_at IS NULL
+RETURNING *;
+
 -- name: RevokeCredential :one
 UPDATE credentials
 SET revoked_at = sqlc.arg(revoked_at)
 WHERE id = sqlc.arg(id)
   AND revoked_at IS NULL
+RETURNING *;
+
+-- name: RevokeCredentialForAccount :one
+UPDATE credentials AS c
+SET revoked_at = sqlc.arg(revoked_at)
+WHERE c.id = sqlc.arg(id)
+  AND c.account_id = sqlc.arg(account_id)
+  AND c.revoked_at IS NULL
+  AND (
+      SELECT count(*)
+      FROM credentials AS active_credentials
+      WHERE active_credentials.account_id = sqlc.arg(account_id)
+        AND active_credentials.revoked_at IS NULL
+  ) > 1
 RETURNING *;

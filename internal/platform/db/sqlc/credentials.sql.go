@@ -130,6 +130,38 @@ func (q *Queries) GetCredentialByID(ctx context.Context, id pgtype.UUID) (Creden
 	return i, err
 }
 
+const getCredentialByIDForAccount = `-- name: GetCredentialByIDForAccount :one
+SELECT id, account_id, kind, provider, external_subject, display_name, verified, created_at, updated_at, last_used_at, revoked_at
+FROM credentials
+WHERE id = $1
+  AND account_id = $2
+  AND revoked_at IS NULL
+`
+
+type GetCredentialByIDForAccountParams struct {
+	ID        pgtype.UUID `json:"id"`
+	AccountID pgtype.UUID `json:"account_id"`
+}
+
+func (q *Queries) GetCredentialByIDForAccount(ctx context.Context, arg GetCredentialByIDForAccountParams) (Credential, error) {
+	row := q.db.QueryRow(ctx, getCredentialByIDForAccount, arg.ID, arg.AccountID)
+	var i Credential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Provider,
+		&i.ExternalSubject,
+		&i.DisplayName,
+		&i.Verified,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const getCredentialByProviderSubject = `-- name: GetCredentialByProviderSubject :one
 SELECT id, account_id, kind, provider, external_subject, display_name, verified, created_at, updated_at, last_used_at, revoked_at
 FROM credentials
@@ -305,6 +337,46 @@ func (q *Queries) RevokeCredential(ctx context.Context, arg RevokeCredentialPara
 	return i, err
 }
 
+const revokeCredentialForAccount = `-- name: RevokeCredentialForAccount :one
+UPDATE credentials AS c
+SET revoked_at = $1
+WHERE c.id = $2
+  AND c.account_id = $3
+  AND c.revoked_at IS NULL
+  AND (
+      SELECT count(*)
+      FROM credentials AS active_credentials
+      WHERE active_credentials.account_id = $3
+        AND active_credentials.revoked_at IS NULL
+  ) > 1
+RETURNING id, account_id, kind, provider, external_subject, display_name, verified, created_at, updated_at, last_used_at, revoked_at
+`
+
+type RevokeCredentialForAccountParams struct {
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	ID        pgtype.UUID        `json:"id"`
+	AccountID pgtype.UUID        `json:"account_id"`
+}
+
+func (q *Queries) RevokeCredentialForAccount(ctx context.Context, arg RevokeCredentialForAccountParams) (Credential, error) {
+	row := q.db.QueryRow(ctx, revokeCredentialForAccount, arg.RevokedAt, arg.ID, arg.AccountID)
+	var i Credential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Provider,
+		&i.ExternalSubject,
+		&i.DisplayName,
+		&i.Verified,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
 const updateCredentialLastUsed = `-- name: UpdateCredentialLastUsed :one
 UPDATE credentials
 SET last_used_at = $1
@@ -352,6 +424,47 @@ type UpdateCredentialStateParams struct {
 
 func (q *Queries) UpdateCredentialState(ctx context.Context, arg UpdateCredentialStateParams) (Credential, error) {
 	row := q.db.QueryRow(ctx, updateCredentialState, arg.Verified, arg.LastUsedAt, arg.ID)
+	var i Credential
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.Kind,
+		&i.Provider,
+		&i.ExternalSubject,
+		&i.DisplayName,
+		&i.Verified,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+		&i.LastUsedAt,
+		&i.RevokedAt,
+	)
+	return i, err
+}
+
+const updateCredentialStateForAccount = `-- name: UpdateCredentialStateForAccount :one
+UPDATE credentials
+SET verified = COALESCE($1, verified),
+    last_used_at = COALESCE($2, last_used_at)
+WHERE id = $3
+  AND account_id = $4
+  AND revoked_at IS NULL
+RETURNING id, account_id, kind, provider, external_subject, display_name, verified, created_at, updated_at, last_used_at, revoked_at
+`
+
+type UpdateCredentialStateForAccountParams struct {
+	Verified   *bool              `json:"verified"`
+	LastUsedAt pgtype.Timestamptz `json:"last_used_at"`
+	ID         pgtype.UUID        `json:"id"`
+	AccountID  pgtype.UUID        `json:"account_id"`
+}
+
+func (q *Queries) UpdateCredentialStateForAccount(ctx context.Context, arg UpdateCredentialStateForAccountParams) (Credential, error) {
+	row := q.db.QueryRow(ctx, updateCredentialStateForAccount,
+		arg.Verified,
+		arg.LastUsedAt,
+		arg.ID,
+		arg.AccountID,
+	)
 	var i Credential
 	err := row.Scan(
 		&i.ID,
