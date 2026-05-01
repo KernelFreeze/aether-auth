@@ -1,6 +1,6 @@
 # Aether Auth
 
-Aether Auth is a self-hosted identity and authorization service for Go systems that need more than a login endpoint. It handles account identity, credential verification, MFA, session management, organization membership, OAuth2 consent, and scoped token issuance from one service.
+Aether Auth is a self-hosted identity and authorization service for Go systems that need more than a login endpoint. It handles account identity, credential verification, MFA, session management, organization membership, OAuth2 consent, and scoped token issuance from one service. It's a reimplementation of Zitadel with my own opinions of how a identity service should behave.
 
 The service is built around three ideas:
 
@@ -175,8 +175,6 @@ PATCH  /orgs/{slug}/members/{account_id}
 GET    /.well-known/paseto-keys
 ```
 
-See `docs/ARCHITECTURE.md` for the security model and API behavior, `docs/IMPLEMENTATION.md` for package wiring and development conventions, and `docs/ZITADEL_REUSE.md` for notes on porting selected implementation ideas from Zitadel.
-
 ## License
 
-Aether Auth is licensed under AGPL-3.0-only. See `LICENSE` and `LICENSING.md`.
+Aether Auth is licensed under AGPL-3.0-only. Some code is extracted or adapted from ZITADEL. Review ZITADEL's license and this repository's `LICENSING.md` for attribution and compatibility details.
