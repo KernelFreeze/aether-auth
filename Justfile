@@ -21,6 +21,11 @@ test-integration:
 test-e2e:
     go test -tags=e2e -v ./test/e2e/...
 
+test-hurl BASE_URL="http://localhost:8080" vars="test/e2e/hurl/local.env":
+    @command -v hurl >/dev/null 2>&1 || { echo "install Hurl: https://hurl.dev"; exit 1; }
+    @test -f {{vars}} || { echo "create {{vars}} from test/e2e/hurl/local.env.example"; exit 1; }
+    hurl --test --variable BASE_URL={{BASE_URL}} --variables-file {{vars}} test/e2e/hurl/*.hurl
+
 podman-build:
     podman build -t {{app_image}} -f Containerfile .
 

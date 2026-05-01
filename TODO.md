@@ -17,20 +17,20 @@ internals. Use Hurl for black-box HTTP flows once a stage exposes real routes
 and can run against a migrated local stack. Hurl tests belong with the e2e
 layer, not the fast `just test` unit gate.
 
-- [ ] Add a Hurl harness when the first black-box account route is ready:
-  - [ ] Create `test/e2e/hurl/` with a short README, environment example, and
+- [x] Add a Hurl harness when the first black-box account route is ready:
+  - [x] Create `test/e2e/hurl/` with a short README, environment example, and
     staged flow files such as `stage04-registration.hurl`.
-  - [ ] Add a `just test-hurl` target that runs Hurl against a caller-provided
+  - [x] Add a `just test-hurl` target that runs Hurl against a caller-provided
     `BASE_URL`, defaulting to the local API port.
-  - [ ] Document the required startup order: podman stack, migrations, API,
+  - [x] Document the required startup order: podman stack, migrations, API,
     worker when async mail or cleanup behavior is under test.
-  - [ ] Keep generated account names, emails, passwords, reset tokens, OAuth
+  - [x] Keep generated account names, emails, passwords, reset tokens, OAuth
     codes, and session tokens out of source-controlled fixtures.
 - [ ] Stage 4 Hurl flow: account registration and credential API smoke tests.
-  - [ ] Register a valid account after the registration route is mounted.
-  - [ ] Assert the response shape never includes password hashes, encrypted
+  - [x] Register a valid account after the registration route is mounted.
+  - [x] Assert the response shape never includes password hashes, encrypted
     credential payloads, reset tokens, or other secret material.
-  - [ ] Repeat registration with the same username and email and assert the
+  - [x] Repeat registration with the same username and email and assert the
     public anti-enumeration contract.
   - [ ] Exercise credential listing/removal only after Stage 6 can provide an
     authenticated session for protected account settings routes.
@@ -271,10 +271,10 @@ Exit criteria:
   - [x] Update display name or profile metadata.
   - [x] List credentials without exposing secrets.
   - [x] Remove credential when policy allows it.
-- [ ] Add repository and handler tests:
-  - [ ] Duplicate username and duplicate email behavior.
-  - [ ] Last credential cannot be removed.
-  - [ ] Public responses do not reveal whether an account exists.
+- [x] Add repository and handler tests:
+  - [x] Duplicate username and duplicate email behavior.
+  - [x] Last credential cannot be removed.
+  - [x] Public responses do not reveal whether an account exists.
 
 Exit criteria:
 

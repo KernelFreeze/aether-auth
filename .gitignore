@@ -11,6 +11,7 @@ dist/
 
 # Environment
 .env
+test/e2e/hurl/local.env
 
 # IDE
 .idea/

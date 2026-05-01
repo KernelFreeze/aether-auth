@@ -13,6 +13,7 @@ import (
 	"go.uber.org/zap"
 
 	"github.com/KernelFreeze/aether-auth/internal/account"
+	"github.com/KernelFreeze/aether-auth/internal/auth"
 	"github.com/KernelFreeze/aether-auth/internal/httpapi"
 	"github.com/KernelFreeze/aether-auth/internal/platform/config"
 	"github.com/KernelFreeze/aether-auth/internal/platform/db"
@@ -97,6 +98,12 @@ func run() error {
 				}),
 				Credentials: account.NewCredentialService(account.CredentialDeps{
 					Store: account.NewSQLCredentialStore(queries),
+				}),
+			}),
+			Auth: auth.New(auth.Deps{
+				Registration: account.NewRegistrationService(account.RegistrationDeps{
+					Store: account.NewSQLRegistrationStore(pool),
+					Audit: account.NewSQLRegistrationAuditWriter(queries),
 				}),
 			}),
 		},
