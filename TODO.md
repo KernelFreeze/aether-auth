@@ -107,15 +107,15 @@ repository layer.
   - [x] `backend/v3/storage/database/dialect/postgres/migration/011_session_table/up.sql`.
   - [x] `backend/v3/storage/database/dialect/postgres/migration/013_user_table/up.sql`.
   - [x] `backend/v3/storage/database/dialect/postgres/migration/017_archived_sessions_table/up.sql`.
-- [ ] Add sqlc query files under `db/queries/`:
-  - [ ] Account lookup by username, email, ID.
-  - [ ] Credential lookup by account, kind, provider, credential ID, and
+- [x] Add sqlc query files under `db/queries/`:
+  - [x] Account lookup by username, email, ID.
+  - [x] Credential lookup by account, kind, provider, credential ID, and
     external subject.
-  - [ ] Challenge insert, consume, expire, and delete.
-  - [ ] Login attempt update and lockout calculation.
-  - [ ] Session create, list, revoke, rotate refresh token, and revoke chain.
-  - [ ] Audit append and recent login query.
-- [ ] Regenerate sqlc output with `just sqlc`.
+  - [x] Challenge insert, consume, expire, and delete.
+  - [x] Login attempt update and lockout calculation.
+  - [x] Session create, list, revoke, rotate refresh token, and revoke chain.
+  - [x] Audit append and recent login query.
+- [x] Regenerate sqlc output with `just sqlc`.
 - [ ] Add repository wrappers that depend on `sqlc.Queries`, not raw SQL in
   handlers.
 - [ ] Add integration tests behind `//go:build integration` for migrations and
@@ -123,7 +123,7 @@ repository layer.
 
 Exit criteria:
 
-- [ ] `just sqlc` succeeds.
+- [x] `just sqlc` succeeds.
 - [ ] `just test` still avoids integration tests.
 - [ ] `just test-integration` covers the first repository batch when Postgres
   is available.
