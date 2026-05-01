@@ -130,12 +130,12 @@ Exit criteria:
 
 ## Stage 3: Platform primitives
 
-- [ ] Finish `internal/platform/crypto`:
-  - [ ] Argon2id PHC-string encode, parse, verify, and needs-rehash helpers.
-  - [ ] HMAC-SHA-256 pepper pre-hash for passwords.
-  - [ ] AES-256-GCM seal/open helpers for credential payloads.
-  - [ ] CSPRNG helpers with unbiased random string generation.
-  - [ ] Constant-time comparison helpers where needed.
+- [x] Finish `internal/platform/crypto`:
+  - [x] Argon2id PHC-string encode, parse, verify, and needs-rehash helpers.
+  - [x] HMAC-SHA-256 pepper pre-hash for passwords.
+  - [x] AES-256-GCM seal/open helpers for credential payloads.
+  - [x] CSPRNG helpers with unbiased random string generation.
+  - [x] Constant-time comparison helpers where needed.
 - [ ] Finish `internal/platform/paseto`:
   - [ ] Load Ed25519 signing keys from secret refs.
   - [ ] Load v4.local symmetric keys from secret refs.
@@ -163,7 +163,7 @@ Exit criteria:
 
 Exit criteria:
 
-- [ ] Crypto helpers have table-driven tests and invalid-input tests.
+- [x] Crypto helpers have table-driven tests and invalid-input tests.
 - [ ] PASETO keystore is no longer a stub.
 - [ ] The public key endpoint returns active verification keys.
 
