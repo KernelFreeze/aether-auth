@@ -89,24 +89,24 @@ This stage gives every later feature stable storage. Translate Zitadel schema
 ideas into Aether migrations and sqlc queries; do not copy Zitadel's dynamic
 repository layer.
 
-- [ ] Add initial migrations in dependency order:
-  - [ ] Accounts, emails, credentials.
-  - [ ] Credential encrypted payload metadata.
-  - [ ] Login attempts and lockout state.
-  - [ ] Sessions, refresh tokens, partial sessions, and session factors.
-  - [ ] WebAuthn challenges and credentials if not stored in generic
+- [x] Add initial migrations in dependency order:
+  - [x] Accounts, emails, credentials.
+  - [x] Credential encrypted payload metadata.
+  - [x] Login attempts and lockout state.
+  - [x] Sessions, refresh tokens, partial sessions, and session factors.
+  - [x] WebAuthn challenges and credentials if not stored in generic
     credential payloads.
-  - [ ] OIDC provider links and pending OIDC states.
-  - [ ] TOTP credentials and recovery-code hashes.
-  - [ ] Password reset tokens.
-  - [ ] OAuth clients, authorization codes, consent grants, and OAuth refresh
+  - [x] OIDC provider links and pending OIDC states.
+  - [x] TOTP credentials and recovery-code hashes.
+  - [x] Password reset tokens.
+  - [x] OAuth clients, authorization codes, consent grants, and OAuth refresh
     tokens.
-  - [ ] Organizations, memberships, and invitations.
-  - [ ] Audit log.
-- [ ] Use Zitadel schema references for shape and indexes:
-  - [ ] `backend/v3/storage/database/dialect/postgres/migration/011_session_table/up.sql`.
-  - [ ] `backend/v3/storage/database/dialect/postgres/migration/013_user_table/up.sql`.
-  - [ ] `backend/v3/storage/database/dialect/postgres/migration/017_archived_sessions_table/up.sql`.
+  - [x] Organizations, memberships, and invitations.
+  - [x] Audit log.
+- [x] Use Zitadel schema references for shape and indexes:
+  - [x] `backend/v3/storage/database/dialect/postgres/migration/011_session_table/up.sql`.
+  - [x] `backend/v3/storage/database/dialect/postgres/migration/013_user_table/up.sql`.
+  - [x] `backend/v3/storage/database/dialect/postgres/migration/017_archived_sessions_table/up.sql`.
 - [ ] Add sqlc query files under `db/queries/`:
   - [ ] Account lookup by username, email, ID.
   - [ ] Credential lookup by account, kind, provider, credential ID, and

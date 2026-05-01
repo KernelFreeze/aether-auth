@@ -1,0 +1,9 @@
+DROP TABLE IF EXISTS login_attempts;
+DROP TABLE IF EXISTS oidc_provider_links;
+DROP TABLE IF EXISTS recovery_codes;
+DROP TABLE IF EXISTS webauthn_credentials;
+DROP TABLE IF EXISTS credential_payloads;
+DROP TABLE IF EXISTS credentials;
+DROP TABLE IF EXISTS emails;
+DROP TABLE IF EXISTS accounts;
+DROP FUNCTION IF EXISTS set_updated_at();
