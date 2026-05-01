@@ -299,8 +299,8 @@ type IDGenerator interface {
 
 // PasswordHash is the PHC string and metadata stored for a password.
 type PasswordHash struct {
-	PHCString string
-	ParamsID  string
+	PHCString string `json:"phc_string"`
+	ParamsID  string `json:"params_id"`
 }
 
 // PasswordHashRequest contains a plaintext password. Callers must not log it.

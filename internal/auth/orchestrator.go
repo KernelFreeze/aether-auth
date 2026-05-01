@@ -201,6 +201,8 @@ func (o *Orchestrator) login(ctx context.Context, req LoginRequest) (AuthResult,
 	verifyReq := VerifyRequest{
 		CredentialInput: req.CredentialInput,
 		AccountHint:     snapshot.ID,
+		Username:        username,
+		MFARequired:     state.MFARequired,
 		IP:              ip,
 		UserAgent:       req.UserAgent,
 		PartialSession:  req.PartialSession,

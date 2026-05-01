@@ -307,6 +307,12 @@ func TestOrchestratorLoginNormalizesPolicyFailures(t *testing.T) {
 			wantReason: "locked_account",
 		},
 		{
+			name:       "disabled account",
+			accounts:   &loginAccountRepository{snapshot: AccountSnapshot{ID: accountID}, state: AccountState{AccountID: accountID, Disabled: true}},
+			limit:      RateLimitResult{Allowed: true},
+			wantReason: "disabled_account",
+		},
+		{
 			name:       "wrong password",
 			accounts:   &loginAccountRepository{snapshot: AccountSnapshot{ID: accountID}, state: AccountState{AccountID: accountID}},
 			limit:      RateLimitResult{Allowed: true},

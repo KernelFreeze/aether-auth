@@ -3,6 +3,7 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"errors"
 	"net/http"
 	"os"
@@ -10,10 +11,13 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/redis/go-redis/v9"
 	"go.uber.org/zap"
 
 	"github.com/KernelFreeze/aether-auth/internal/account"
 	"github.com/KernelFreeze/aether-auth/internal/auth"
+	"github.com/KernelFreeze/aether-auth/internal/auth/password"
 	"github.com/KernelFreeze/aether-auth/internal/httpapi"
 	"github.com/KernelFreeze/aether-auth/internal/platform/config"
 	"github.com/KernelFreeze/aether-auth/internal/platform/db"
@@ -87,6 +91,19 @@ func run() error {
 
 	queries := sqlc.New(pool)
 	rateLimiter := ratelimit.NewRedisChecker(rdb, ratelimit.ConfigFrom(cfg.RateLimits))
+	passwordService, err := newPasswordService(ctx, cfg, sec, pool, queries, rdb)
+	if err != nil {
+		return err
+	}
+	orchestrator, err := auth.NewOrchestratorWithDeps(auth.OrchestratorDeps{
+		Accounts:          auth.NewSQLAccountRepository(queries),
+		RateLimiter:       authRateLimiter{checker: rateLimiter},
+		Audit:             auth.NewSQLAuditWriter(queries),
+		DummyPasswordWork: passwordService,
+	}, passwordService)
+	if err != nil {
+		return err
+	}
 	router := httpapi.NewRouter(httpapi.Deps{
 		Config:     cfg,
 		Logger:     log,
@@ -105,6 +122,7 @@ func run() error {
 					Store: account.NewSQLRegistrationStore(pool),
 					Audit: account.NewSQLRegistrationAuditWriter(queries),
 				}),
+				Login: orchestrator,
 			}),
 		},
 		Middlewares: httpapi.Middlewares{
@@ -146,9 +164,78 @@ func run() error {
 	return nil
 }
 
+func newPasswordService(ctx context.Context, cfg *config.Config, sec secrets.Provider, pool interface {
+	sqlc.DBTX
+	Begin(context.Context) (pgx.Tx, error)
+}, queries sqlc.Querier, rdb interface {
+	redis.Cmdable
+}) (*password.Service, error) {
+	pepper, err := sec.Resolve(ctx, cfg.Secrets.Pepper)
+	if err != nil {
+		return nil, err
+	}
+	box, err := password.NewAESGCMBox(ctx, sec, cfg.Secrets.AESKey, rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	hasher := password.NewArgon2idHasher(cfg.Argon2, pepper, rand.Reader)
+	dummyHash, err := hasher.HashPassword(ctx, auth.PasswordHashRequest{Password: "aether-auth dummy password"})
+	if err != nil {
+		return nil, err
+	}
+
+	return password.New(password.Deps{
+		Credentials: auth.NewSQLCredentialRepository(queries, auth.UUIDGenerator{}, auth.CredentialPayloadConfig{
+			Algorithm: "aes-256-gcm",
+			KeyRef:    cfg.Secrets.AESKey,
+			Version:   1,
+		}),
+		Hasher:            hasher,
+		Policy:            password.NISTPolicy{},
+		Breaches:          password.NewHIBPChecker(cfg.HIBP, password.NewRedisRangeCache(rdb)),
+		Box:               box,
+		Attempts:          password.NewSQLAttemptStore(pool, password.LockoutPolicyFromConfig(cfg.Lockout)),
+		PartialSessionTTL: cfg.Session.PartialSessionTTL,
+		DummyHash:         dummyHash,
+	}), nil
+}
+
 func shutdownTimeout(cfg *config.Config) time.Duration {
 	if cfg.Server.ShutdownTimeout > 0 {
 		return cfg.Server.ShutdownTimeout
 	}
 	return 10 * time.Second
+}
+
+type authRateLimiter struct {
+	checker ratelimit.Checker
+}
+
+func (l authRateLimiter) CheckRateLimit(ctx context.Context, req auth.RateLimitRequest) (auth.RateLimitResult, error) {
+	if l.checker == nil {
+		return auth.RateLimitResult{}, auth.NewServiceError(auth.ErrorKindInternal, "rate limiter is nil", nil)
+	}
+	var accountID string
+	if !req.Subject.AccountID.IsZero() {
+		accountID = req.Subject.AccountID.String()
+	}
+	decision, err := l.checker.Check(ctx, ratelimit.Request{
+		Subject: ratelimit.Subject{
+			IP:        req.Subject.IP,
+			AccountID: accountID,
+			Username:  req.Subject.Username,
+			Endpoint:  req.Subject.Endpoint,
+		},
+		Cost: req.Cost,
+	})
+	if err != nil {
+		return auth.RateLimitResult{}, err
+	}
+	return auth.RateLimitResult{
+		Allowed:    decision.Allowed,
+		Limit:      decision.Limit,
+		Remaining:  decision.Remaining,
+		RetryAfter: decision.RetryAfter,
+		ResetAt:    decision.ResetAt,
+	}, nil
 }

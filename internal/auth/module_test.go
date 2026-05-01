@@ -124,6 +124,106 @@ func TestAuthModuleRegisterValidatesRequest(t *testing.T) {
 	}
 }
 
+func TestAuthModuleLoginWithPasswordIssuesFullSession(t *testing.T) {
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000701")
+	sessionID := parseSessionID(t, "018f1f74-10a1-7000-9000-000000000702")
+	login := &loginManager{
+		result: AuthResult{
+			AccountID:       accountID,
+			CredentialID:    mustCredentialID(t, "018f1f74-10a1-7000-9000-000000000703"),
+			VerifiedFactors: []account.FactorKind{account.FactorKindUser, account.FactorKindPassword},
+			MFAStatus:       MFAStatusNotRequired,
+			Session: SessionIssueInstructions{
+				Issue:    true,
+				Scopes:   []string{"openid", "profile"},
+				Audience: []string{"https://api.example.test"},
+			},
+		},
+	}
+	sessions := &sessionIssuer{
+		full: SessionIssueResult{
+			SessionID:    sessionID,
+			AccessToken:  "access-token",
+			RefreshToken: "refresh-token",
+			ExpiresAt:    time.Date(2026, 5, 1, 12, 15, 0, 0, time.UTC),
+		},
+	}
+	router := authTestRouter(t, New(Deps{Login: login, Sessions: sessions}))
+
+	req := testutil.NewJSONRequest(t, http.MethodPost, "/auth/login", map[string]any{
+		"kind":     "password",
+		"username": " Celeste ",
+		"password": "correct horse battery staple",
+	})
+	req.Header.Set("X-Request-Id", "req-login")
+	req.Header.Set("User-Agent", "login-test")
+	rec := testutil.Record(router, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var body loginResponse
+	testutil.DecodeJSON(t, rec.Body, &body)
+	if body.Status != "authenticated" || body.Session == nil || body.Session.AccessToken != "access-token" || body.Session.RefreshToken != "refresh-token" {
+		t.Fatalf("login response = %#v", body)
+	}
+	if login.req.Kind != account.CredentialKindPassword || login.req.CredentialInput != "correct horse battery staple" {
+		t.Fatalf("login request = %#v", login.req)
+	}
+	if sessions.fullReq.AccountID != accountID || len(sessions.fullReq.VerifiedFactors) != 2 {
+		t.Fatalf("session request = %#v", sessions.fullReq)
+	}
+	if strings.Contains(rec.Body.String(), "correct horse") || strings.Contains(rec.Body.String(), "password") {
+		t.Fatalf("login response leaked password material: %s", rec.Body.String())
+	}
+}
+
+func TestAuthModuleLoginUsesGenericPublicErrors(t *testing.T) {
+	for _, err := range []error{
+		ErrInvalidCredentials,
+		ErrLockedAccount,
+		ErrPolicyDenied,
+	} {
+		t.Run(err.Error(), func(t *testing.T) {
+			router := authTestRouter(t, New(Deps{Login: &loginManager{err: err}}))
+
+			rec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodPost, "/auth/login", map[string]any{
+				"kind":     "password",
+				"username": "celeste",
+				"password": "wrong password",
+			}))
+
+			if rec.Code != http.StatusUnauthorized {
+				t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusUnauthorized, rec.Body.String())
+			}
+			var body httpxProblem
+			testutil.DecodeJSON(t, rec.Body, &body)
+			if body.Code != "invalid_credentials" {
+				t.Fatalf("problem = %#v", body)
+			}
+		})
+	}
+}
+
+func TestAuthModuleLoginValidatesPasswordBody(t *testing.T) {
+	router := authTestRouter(t, New(Deps{Login: &loginManager{}}))
+
+	rec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodPost, "/auth/login", map[string]any{
+		"kind":     "oidc",
+		"username": "celeste",
+		"password": "correct horse battery staple",
+	}))
+
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusBadRequest)
+	}
+	var body httpxProblem
+	testutil.DecodeJSON(t, rec.Body, &body)
+	if body.Code != "invalid_login" {
+		t.Fatalf("problem = %#v", body)
+	}
+}
+
 func authTestRouter(t testing.TB, module *Module) *gin.Engine {
 	t.Helper()
 	testutil.SetGinTestMode(t)
@@ -154,6 +254,44 @@ type httpxProblem struct {
 		Name   string `json:"name"`
 		Reason string `json:"reason"`
 	} `json:"fields"`
+}
+
+type loginManager struct {
+	req    LoginRequest
+	result AuthResult
+	err    error
+}
+
+func (m *loginManager) Login(_ context.Context, req LoginRequest) (AuthResult, error) {
+	m.req = req
+	if m.err != nil {
+		return AuthResult{}, m.err
+	}
+	return m.result, nil
+}
+
+type sessionIssuer struct {
+	full       SessionIssueResult
+	partial    PartialSessionIssueResult
+	fullReq    SessionIssueRequest
+	partialReq PartialSessionIssueRequest
+	err        error
+}
+
+func (i *sessionIssuer) IssueSession(_ context.Context, req SessionIssueRequest) (SessionIssueResult, error) {
+	i.fullReq = req
+	if i.err != nil {
+		return SessionIssueResult{}, i.err
+	}
+	return i.full, nil
+}
+
+func (i *sessionIssuer) IssuePartialSession(_ context.Context, req PartialSessionIssueRequest) (PartialSessionIssueResult, error) {
+	i.partialReq = req
+	if i.err != nil {
+		return PartialSessionIssueResult{}, i.err
+	}
+	return i.partial, nil
 }
 
 type registrationStore struct {
@@ -205,6 +343,15 @@ func (g registrationIDs) NewEmailID() (uuid.UUID, error) {
 		return uuid.MustParse("018f1f74-10a1-7000-9000-000000000698"), nil
 	}
 	return g.emailID, nil
+}
+
+func parseSessionID(t testing.TB, value string) account.SessionID {
+	t.Helper()
+	id, err := account.ParseSessionID(value)
+	if err != nil {
+		t.Fatalf("parse session id: %v", err)
+	}
+	return id
 }
 
 type registrationClock struct {

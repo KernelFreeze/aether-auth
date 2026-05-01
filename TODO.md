@@ -295,12 +295,12 @@ policy.
   - [x] Run dummy password work for missing accounts.
   - [x] Apply timing equalization on success, failure, and lockout paths.
   - [x] Emit audit events for success and failure.
-- [ ] Implement `internal/auth/password`:
-  - [ ] Password set/change with policy checks.
-  - [ ] HIBP k-anonymity breach check with Redis cache.
-  - [ ] Argon2id hash with pepper.
-  - [ ] Password verification outside DB transactions.
-  - [ ] Rehash on login when parameters change.
+- [x] Implement `internal/auth/password`:
+  - [x] Password set/change with policy checks.
+  - [x] HIBP k-anonymity breach check with Redis cache.
+  - [x] Argon2id hash with pepper.
+  - [x] Password verification outside DB transactions.
+  - [x] Rehash on login when parameters change.
 - [ ] Reuse or port from Zitadel:
   - [ ] `backend/v3/domain/session_check_password.go` for the factor update
     model.
@@ -309,17 +309,17 @@ policy.
   - [ ] `internal/command/user_human_password_test.go` for failure and lockout
     cases.
 - [ ] Keep Aether-specific behavior:
-  - [ ] No copied password composition rules.
-  - [ ] Generic public errors for wrong username, wrong password, inactive
+  - [x] No copied password composition rules.
+  - [x] Generic public errors for wrong username, wrong password, inactive
     account, and lockout.
   - [ ] Forgot-password remains available during lockout.
-- [ ] Add route tests for `POST /auth/login` with password credentials.
+- [x] Add route tests for `POST /auth/login` with password credentials.
 
 Exit criteria:
 
-- [ ] Password login can issue either a full session or a partial MFA session.
-- [ ] Failed attempts update lockout state in one transaction.
-- [ ] Login tests cover wrong username, wrong password, locked account, and
+- [x] Password login can issue either a full session or a partial MFA session.
+- [x] Failed attempts update lockout state in one transaction.
+- [x] Login tests cover wrong username, wrong password, locked account, and
   valid login without distinguishable public errors.
 
 ## Stage 6: Session lifecycle and token issuance

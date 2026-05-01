@@ -62,6 +62,8 @@ type VerifyRequest struct {
 	CredentialInput any
 	ChallengeID     string
 	AccountHint     account.AccountID
+	Username        string
+	MFARequired     bool
 	IP              netip.Addr
 	UserAgent       string
 	PartialSession  *PartialSession
