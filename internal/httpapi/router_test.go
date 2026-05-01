@@ -4,6 +4,8 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/gin-gonic/gin"
+
 	"github.com/KernelFreeze/aether-auth/internal/httpapi"
 	"github.com/KernelFreeze/aether-auth/internal/testutil"
 )
@@ -56,6 +58,49 @@ func TestNewRouterServesScaffoldEndpoints(t *testing.T) {
 	}
 }
 
+func TestNewRouterMountsFeatureModulesOnCentralPrefixes(t *testing.T) {
+	testutil.SetGinTestMode(t)
+
+	router := httpapi.NewRouter(httpapi.Deps{
+		Config: testutil.Config(),
+		Logger: testutil.Logger(t),
+		Modules: httpapi.FeatureModules{
+			Account:       probeModule{name: "account"},
+			Auth:          probeModule{name: "auth"},
+			MFA:           probeModule{name: "mfa"},
+			OAuth:         probeModule{name: "oauth"},
+			Organization:  probeModule{name: "org"},
+			PasswordReset: probeModule{name: "password-reset"},
+			Session:       probeModule{name: "session"},
+		},
+	})
+
+	tests := map[string]string{
+		"/account/probe":        "account",
+		"/auth/probe":           "auth",
+		"/mfa/probe":            "mfa",
+		"/oauth/probe":          "oauth",
+		"/org/probe":            "org",
+		"/password-reset/probe": "password-reset",
+		"/session/probe":        "session",
+	}
+
+	for path, want := range tests {
+		t.Run(path, func(t *testing.T) {
+			rec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodGet, path, nil))
+			if rec.Code != http.StatusOK {
+				t.Fatalf("status = %d, want %d", rec.Code, http.StatusOK)
+			}
+
+			var body map[string]string
+			testutil.DecodeJSON(t, rec.Body, &body)
+			if got := body["module"]; got != want {
+				t.Fatalf("module = %q, want %q", got, want)
+			}
+		})
+	}
+}
+
 func assertJSONValue(t *testing.T, got, want any) {
 	t.Helper()
 	switch want := want.(type) {
@@ -74,4 +119,14 @@ func assertJSONValue(t *testing.T, got, want any) {
 	default:
 		t.Fatalf("unsupported expected value type %T", want)
 	}
+}
+
+type probeModule struct {
+	name string
+}
+
+func (m probeModule) RegisterRoutes(r gin.IRouter, _ httpapi.Middlewares) {
+	r.GET("/probe", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"module": m.name})
+	})
 }

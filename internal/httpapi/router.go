@@ -12,8 +12,10 @@ import (
 // Deps collects the wiring inputs the router needs. Feature modules will be
 // attached to this struct as their packages come online.
 type Deps struct {
-	Config *config.Config
-	Logger *zap.Logger
+	Config      *config.Config
+	Logger      *zap.Logger
+	Modules     FeatureModules
+	Middlewares Middlewares
 }
 
 // NewRouter builds the project's Gin engine, applies the standard middleware
@@ -35,5 +37,24 @@ func NewRouter(d Deps) *gin.Engine {
 	r.GET("/healthz", handlers.Health())
 	r.GET("/.well-known/paseto-keys", handlers.PASETOKeys())
 
+	registerFeatureRoutes(r, d.Modules, d.Middlewares)
+
 	return r
+}
+
+func registerFeatureRoutes(r *gin.Engine, modules FeatureModules, mw Middlewares) {
+	mountModule(r, "/account", modules.Account, mw)
+	mountModule(r, "/auth", modules.Auth, mw)
+	mountModule(r, "/mfa", modules.MFA, mw)
+	mountModule(r, "/oauth", modules.OAuth, mw)
+	mountModule(r, "/org", modules.Organization, mw)
+	mountModule(r, "/password-reset", modules.PasswordReset, mw)
+	mountModule(r, "/session", modules.Session, mw)
+}
+
+func mountModule(r *gin.Engine, prefix string, module Module, mw Middlewares) {
+	if module == nil {
+		return
+	}
+	module.RegisterRoutes(r.Group(prefix), mw)
 }

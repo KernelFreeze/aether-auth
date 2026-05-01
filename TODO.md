@@ -64,11 +64,11 @@ orchestrator while still allowing method-specific challenge flows.
   - [x] `application/problem+json` helpers in `internal/platform/httpx`.
   - [x] A stable place for error IDs if Zitadel's `internal/zerrors` model is
     adapted.
-- [ ] Define module wiring conventions:
-  - [ ] Every feature exposes `Module`, `Deps`, `New(deps)`, and
+- [x] Define module wiring conventions:
+  - [x] Every feature exposes `Module`, `Deps`, `New(deps)`, and
     `RegisterRoutes`.
-  - [ ] `internal/httpapi/router.go` remains the only complete URL map.
-  - [ ] No feature package reads global config or opens its own DB, Redis,
+  - [x] `internal/httpapi/router.go` remains the only complete URL map.
+  - [x] No feature package reads global config or opens its own DB, Redis,
     mailer, queue, or logger.
 - [ ] Add unit tests for interface-level behavior:
   - [ ] Fake `AuthMethod` implementations can be registered and called by the
