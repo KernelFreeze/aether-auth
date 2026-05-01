@@ -21,6 +21,7 @@ import (
 	"github.com/KernelFreeze/aether-auth/internal/platform/queue"
 	platformredis "github.com/KernelFreeze/aether-auth/internal/platform/redis"
 	"github.com/KernelFreeze/aether-auth/internal/platform/secrets"
+	"github.com/KernelFreeze/aether-auth/internal/ratelimit"
 	"github.com/KernelFreeze/aether-auth/internal/server"
 )
 
@@ -81,10 +82,14 @@ func run() error {
 		log.Warn("paseto keystore not initialized", zap.Error(err))
 	}
 
+	rateLimiter := ratelimit.NewRedisChecker(rdb, ratelimit.ConfigFrom(cfg.RateLimits))
 	router := httpapi.NewRouter(httpapi.Deps{
 		Config:     cfg,
 		Logger:     log,
 		PASETOKeys: keystore,
+		Middlewares: httpapi.Middlewares{
+			RateLimit: ratelimit.NewMiddleware(rateLimiter),
+		},
 	})
 
 	srv := server.NewServer(router, server.Options{

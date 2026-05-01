@@ -150,10 +150,10 @@ Exit criteria:
   - [x] Problem response helpers.
   - [x] Generic auth failure helpers.
   - [x] Timing equalizer helper for login and reset flows.
-- [ ] Finish `internal/ratelimit`:
-  - [ ] Redis-backed IP, account, and endpoint buckets.
-  - [ ] Middleware hooks usable before auth verification.
-  - [ ] Unit tests with fake limiter and integration tests with Redis.
+- [x] Finish `internal/ratelimit`:
+  - [x] Redis-backed IP, account, and endpoint buckets.
+  - [x] Middleware hooks usable before auth verification.
+  - [x] Unit tests with fake limiter and integration tests with Redis.
 - [ ] Add test helpers under `internal/testutil`:
   - [ ] Fake clock.
   - [ ] Deterministic random reader.

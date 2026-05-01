@@ -1,6 +1,10 @@
 package httpapi
 
-import "github.com/gin-gonic/gin"
+import (
+	"github.com/gin-gonic/gin"
+
+	"github.com/KernelFreeze/aether-auth/internal/ratelimit"
+)
 
 // Module is the route-registration contract for feature packages.
 //
@@ -30,6 +34,6 @@ type Middlewares struct {
 	Authenticate  gin.HandlerFunc
 	RequireScope  func(scopes ...string) gin.HandlerFunc
 	CSRF          gin.HandlerFunc
-	RateLimit     gin.HandlerFunc
+	RateLimit     func(...ratelimit.MiddlewareOption) gin.HandlerFunc
 	SecureHeaders gin.HandlerFunc
 }

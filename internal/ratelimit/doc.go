@@ -1,4 +1,4 @@
-// Package ratelimit exposes Redis-backed sliding-window / GCRA limiters keyed
-// by IP, account, and endpoint, plus a Gin middleware that enforces them
-// before credential verification runs.
+// Package ratelimit exposes Redis-backed GCRA limiters keyed by IP, account,
+// username, and endpoint. It also provides Gin middleware that feature modules
+// can run before credential verification starts.
 package ratelimit
