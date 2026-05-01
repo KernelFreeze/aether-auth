@@ -16,15 +16,15 @@ This stage must land before password, WebAuthn, OIDC, TOTP, MFA, sessions, or
 OAuth2 work. The goal is to make every auth method look like a plug-in to the
 orchestrator while still allowing method-specific challenge flows.
 
-- [ ] Create shared domain types for identity and credentials, likely under
+- [x] Create shared domain types for identity and credentials, likely under
   `internal/account` or a small shared package:
-  - [ ] `AccountID`, `CredentialID`, `SessionID`, `OrganizationID`, and
+  - [x] `AccountID`, `CredentialID`, `SessionID`, `OrganizationID`, and
     `ClientID` wrappers or documented UUID aliases.
-  - [ ] `CredentialKind` values: `password`, `webauthn`, `oidc`, `totp`,
+  - [x] `CredentialKind` values: `password`, `webauthn`, `oidc`, `totp`,
     `recovery_code`.
-  - [ ] `FactorKind` values: `user`, `password`, `passkey`, `idp`, `totp`,
+  - [x] `FactorKind` values: `user`, `password`, `passkey`, `idp`, `totp`,
     `recovery_code`.
-  - [ ] Shared timestamp and expiry conventions.
+  - [x] Shared timestamp and expiry conventions.
 - [ ] Define the core `AuthMethod` interface before implementing any method.
   It should cover both immediate methods such as password and challenge-based
   methods such as WebAuthn and OIDC.
