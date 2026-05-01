@@ -13,8 +13,6 @@ FROM registry.access.redhat.com/ubi9/ubi-micro:latest
 WORKDIR /app
 
 COPY --from=builder /tmp/aether-auth /app/aether-auth
-COPY --from=builder /opt/app-root/src/templates /app/templates
-COPY --from=builder /opt/app-root/src/internal/email/templates /app/internal/email/templates
 
 EXPOSE 8080
 
