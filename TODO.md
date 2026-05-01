@@ -25,23 +25,23 @@ orchestrator while still allowing method-specific challenge flows.
   - [x] `FactorKind` values: `user`, `password`, `passkey`, `idp`, `totp`,
     `recovery_code`.
   - [x] Shared timestamp and expiry conventions.
-- [ ] Define the core `AuthMethod` interface before implementing any method.
+- [x] Define the core `AuthMethod` interface before implementing any method.
   It should cover both immediate methods such as password and challenge-based
   methods such as WebAuthn and OIDC.
-  - [ ] `Kind() CredentialKind`.
-  - [ ] `Begin(ctx, BeginRequest) (BeginResult, error)` for challenge,
+  - [x] `Kind() CredentialKind`.
+  - [x] `Begin(ctx, BeginRequest) (BeginResult, error)` for challenge,
     redirect, or no-op setup.
-  - [ ] `Verify(ctx, VerifyRequest) (AuthResult, error)` for credential
+  - [x] `Verify(ctx, VerifyRequest) (AuthResult, error)` for credential
     verification.
-  - [ ] Document which methods may create, link, or only verify credentials.
-- [ ] Define request/result structs used by every auth method:
-  - [ ] `BeginRequest`: username, account hint, provider, redirect URI, user
+  - [x] Document which methods may create, link, or only verify credentials.
+- [x] Define request/result structs used by every auth method:
+  - [x] `BeginRequest`: username, account hint, provider, redirect URI, user
     agent, IP, session/challenge binding, and trace-safe request ID.
-  - [ ] `BeginResult`: challenge payload, redirect URL, challenge ID, expiry,
+  - [x] `BeginResult`: challenge payload, redirect URL, challenge ID, expiry,
     and public metadata safe to send to clients.
-  - [ ] `VerifyRequest`: credential input, challenge ID, account hint, IP, user
+  - [x] `VerifyRequest`: credential input, challenge ID, account hint, IP, user
     agent, and current partial session if present.
-  - [ ] `AuthResult`: account ID, credential ID, verified factors, MFA status,
+  - [x] `AuthResult`: account ID, credential ID, verified factors, MFA status,
     external identity data, audit metadata, and session issue instructions.
 - [ ] Define cross-feature interfaces with small method sets:
   - [ ] `AccountRepository` for account lookup and state checks.
