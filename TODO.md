@@ -60,7 +60,7 @@ layer, not the fast `just test` unit gate.
   - [ ] Assert redirect, state, nonce, PKCE, provider-error, and auto-create
     disabled responses.
 - [ ] Stage 10 Hurl flow: password reset.
-  - [ ] Submit reset requests for known and unknown accounts and assert public
+  - [x] Submit reset requests for known and unknown accounts and assert public
     response parity.
   - [ ] Read the captured reset email from the local mail test service, confirm
     the reset, then assert token replay fails.
@@ -308,11 +308,11 @@ policy.
     and lockout flow.
   - [x] `internal/command/user_human_password_test.go` for failure and lockout
     cases.
-- [ ] Keep Aether-specific behavior:
+- [x] Keep Aether-specific behavior:
   - [x] No copied password composition rules.
   - [x] Generic public errors for wrong username, wrong password, inactive
     account, and lockout.
-  - [ ] Forgot-password remains available during lockout.
+  - [x] Forgot-password remains available during lockout.
 - [x] Add route tests for `POST /auth/login` with password credentials.
 
 Exit criteria:
@@ -498,14 +498,14 @@ Exit criteria:
 
 ## Stage 10: Password reset and account recovery
 
-- [ ] Implement reset request:
-  - [ ] Accept username or email.
-  - [ ] Always return the same public message.
-  - [ ] Apply rate limiting before lookup.
-  - [ ] Generate a 256-bit random token.
-  - [ ] Store only SHA-256 token hash.
-  - [ ] Use fixed or allowlisted reset URL origin.
-  - [ ] Queue reset email through Asynq.
+- [x] Implement reset request:
+  - [x] Accept username or email.
+  - [x] Always return the same public message.
+  - [x] Apply rate limiting before lookup.
+  - [x] Generate a 256-bit random token.
+  - [x] Store only SHA-256 token hash.
+  - [x] Use fixed or allowlisted reset URL origin.
+  - [x] Queue reset email through Asynq.
 - [ ] Implement reset confirm:
   - [ ] Verify token hash, expiry, and unused state.
   - [ ] Validate password policy and HIBP status.
@@ -518,7 +518,7 @@ Exit criteria:
   - [ ] Password changed notification.
   - [ ] Suspicious reset attempt notification when needed for timing parity.
 - [ ] Add tests:
-  - [ ] Unknown account response parity.
+  - [x] Unknown account response parity.
   - [ ] Expired, used, and malformed token handling.
   - [ ] Session revocation on reset.
   - [ ] Referrer policy and host-header safety at handler boundary.

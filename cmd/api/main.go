@@ -19,6 +19,7 @@ import (
 	"github.com/KernelFreeze/aether-auth/internal/auth"
 	"github.com/KernelFreeze/aether-auth/internal/auth/password"
 	"github.com/KernelFreeze/aether-auth/internal/httpapi"
+	"github.com/KernelFreeze/aether-auth/internal/passwordreset"
 	"github.com/KernelFreeze/aether-auth/internal/platform/config"
 	"github.com/KernelFreeze/aether-auth/internal/platform/db"
 	"github.com/KernelFreeze/aether-auth/internal/platform/db/sqlc"
@@ -123,6 +124,15 @@ func run() error {
 					Audit: account.NewSQLRegistrationAuditWriter(queries),
 				}),
 				Login: orchestrator,
+			}),
+			PasswordReset: passwordreset.New(passwordreset.Deps{
+				Requester: passwordreset.NewService(passwordreset.ServiceDeps{
+					Store:         passwordreset.NewSQLStore(queries),
+					EmailQueue:    passwordreset.NewAsynqEmailQueue(asynqClient),
+					Random:        rand.Reader,
+					TokenTTL:      cfg.PasswordReset.TokenTTL,
+					PublicBaseURL: cfg.Issuer.BaseURL,
+				}),
 			}),
 		},
 		Middlewares: httpapi.Middlewares{

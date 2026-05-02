@@ -113,13 +113,13 @@ func TestNewRouterMountsFeatureModulesOnCentralPrefixes(t *testing.T) {
 	})
 
 	tests := map[string]string{
-		"/account/probe":        "account",
-		"/auth/probe":           "auth",
-		"/mfa/probe":            "mfa",
-		"/oauth/probe":          "oauth",
-		"/org/probe":            "org",
-		"/password-reset/probe": "password-reset",
-		"/session/probe":        "session",
+		"/account/probe":             "account",
+		"/auth/probe":                "auth",
+		"/mfa/probe":                 "mfa",
+		"/oauth/probe":               "oauth",
+		"/org/probe":                 "org",
+		"/auth/reset-password/probe": "password-reset",
+		"/session/probe":             "session",
 	}
 
 	for path, want := range tests {

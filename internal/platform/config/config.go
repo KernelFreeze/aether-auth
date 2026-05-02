@@ -14,26 +14,27 @@ import (
 // Config is the top-level configuration tree. Each subsystem owns its own
 // nested struct so the boundary between concerns is visible at the type level.
 type Config struct {
-	Server     ServerConfig
-	Postgres   PostgresConfig
-	Redis      RedisConfig
-	Mailer     MailerConfig
-	Queue      QueueConfig
-	Issuer     IssuerConfig
-	Secrets    SecretsConfig
-	Argon2     Argon2Config
-	Session    SessionConfig
-	PASETO     PASETOConfig
-	OAuth      OAuthServerConfig
-	OIDC       OIDCConfig
-	RateLimits RateLimitConfig
-	Lockout    LockoutConfig
-	HIBP       HIBPConfig
-	CSRF       CSRFConfig
-	CORS       CORSConfig
-	Audit      AuditConfig
-	Logging    LoggingConfig
-	Org        OrgConfig
+	Server        ServerConfig
+	Postgres      PostgresConfig
+	Redis         RedisConfig
+	Mailer        MailerConfig
+	Queue         QueueConfig
+	Issuer        IssuerConfig
+	Secrets       SecretsConfig
+	Argon2        Argon2Config
+	Session       SessionConfig
+	PASETO        PASETOConfig
+	OAuth         OAuthServerConfig
+	OIDC          OIDCConfig
+	RateLimits    RateLimitConfig
+	Lockout       LockoutConfig
+	PasswordReset PasswordResetConfig
+	HIBP          HIBPConfig
+	CSRF          CSRFConfig
+	CORS          CORSConfig
+	Audit         AuditConfig
+	Logging       LoggingConfig
+	Org           OrgConfig
 }
 
 // Load reads the configuration from process environment variables using the
@@ -168,6 +169,11 @@ type LockoutConfig struct {
 	FailuresBeforeLockout int             `env:"LOCKOUT_FAILURES, default=5"`
 	BackoffSchedule       []time.Duration `env:"LOCKOUT_BACKOFF, default=1m,5m,15m,1h"`
 	CaptchaAfterFailures  int             `env:"LOCKOUT_CAPTCHA_AFTER, default=3"`
+}
+
+// PasswordResetConfig configures forgot-password request tokens.
+type PasswordResetConfig struct {
+	TokenTTL time.Duration `env:"PASSWORD_RESET_TOKEN_TTL, default=20m"`
 }
 
 // HIBPConfig controls the Have I Been Pwned breach-corpus check.

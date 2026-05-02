@@ -215,6 +215,9 @@ func baseConfig() config.Config {
 			BackoffSchedule:       []time.Duration{time.Minute, 5 * time.Minute, 15 * time.Minute, time.Hour},
 			CaptchaAfterFailures:  3,
 		},
+		PasswordReset: config.PasswordResetConfig{
+			TokenTTL: 20 * time.Minute,
+		},
 		HIBP: config.HIBPConfig{
 			Enabled:  true,
 			BaseURL:  "https://api.pwnedpasswords.com",

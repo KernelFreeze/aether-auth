@@ -81,6 +81,9 @@ lockout:
   backoff: ["1m", "5m", "15m", "1h"]
   captcha_after: 3
 
+password_reset:
+  token_ttl: "20m"
+
 hibp:
   enabled: true
   base_url: "https://api.pwnedpasswords.com"

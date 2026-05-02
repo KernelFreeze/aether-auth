@@ -50,7 +50,7 @@ func registerFeatureRoutes(r *gin.Engine, modules FeatureModules, mw Middlewares
 	mountModule(r, "/mfa", modules.MFA, mw)
 	mountModule(r, "/oauth", modules.OAuth, mw)
 	mountModule(r, "/org", modules.Organization, mw)
-	mountModule(r, "/password-reset", modules.PasswordReset, mw)
+	mountModule(r, "/auth/reset-password", modules.PasswordReset, mw)
 	mountModule(r, "/session", modules.Session, mw)
 }
 
