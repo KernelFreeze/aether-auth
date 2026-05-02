@@ -31,6 +31,7 @@ import (
 	"github.com/KernelFreeze/aether-auth/internal/platform/secrets"
 	"github.com/KernelFreeze/aether-auth/internal/ratelimit"
 	"github.com/KernelFreeze/aether-auth/internal/server"
+	"github.com/KernelFreeze/aether-auth/internal/session"
 )
 
 func main() {
@@ -89,6 +90,10 @@ func run() error {
 	if err != nil {
 		log.Warn("paseto keystore not initialized", zap.Error(err))
 	}
+	var tokenIssuer session.TokenIssuer
+	if keystore != nil {
+		tokenIssuer = keystore
+	}
 
 	queries := sqlc.New(pool)
 	rateLimiter := ratelimit.NewRedisChecker(rdb, ratelimit.ConfigFrom(cfg.RateLimits))
@@ -96,6 +101,12 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	sessionIssuer := session.NewService(session.ServiceDeps{
+		Store:  session.NewSQLStore(pool, queries),
+		Tokens: tokenIssuer,
+		Random: rand.Reader,
+		Config: session.ConfigFrom(cfg),
+	})
 	orchestrator, err := auth.NewOrchestratorWithDeps(auth.OrchestratorDeps{
 		Accounts:          auth.NewSQLAccountRepository(queries),
 		RateLimiter:       authRateLimiter{checker: rateLimiter},
@@ -123,7 +134,8 @@ func run() error {
 					Store: account.NewSQLRegistrationStore(pool),
 					Audit: account.NewSQLRegistrationAuditWriter(queries),
 				}),
-				Login: orchestrator,
+				Login:    orchestrator,
+				Sessions: sessionIssuer,
 			}),
 			PasswordReset: passwordreset.New(passwordreset.Deps{
 				Requester: passwordreset.NewService(passwordreset.ServiceDeps{

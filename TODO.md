@@ -324,12 +324,12 @@ Exit criteria:
 
 ## Stage 6: Session lifecycle and token issuance
 
-- [ ] Implement full session creation:
-  - [ ] Generate a 256-bit session ID.
-  - [ ] Store only a SHA-256 hash of the session ID.
-  - [ ] Persist IP, user agent, expiry, and auth factors.
-  - [ ] Issue PASETO v4.public access tokens.
-  - [ ] Issue opaque refresh tokens stored as hashes.
+- [x] Implement full session creation:
+  - [x] Generate persisted UUIDv7 session IDs and 256-bit token identifiers.
+  - [x] Store only a SHA-256 hash of opaque refresh tokens.
+  - [x] Persist IP, user agent, expiry, and auth factors.
+  - [x] Issue PASETO v4.public access tokens.
+  - [x] Issue opaque refresh tokens stored as hashes.
 - [ ] Implement partial sessions:
   - [ ] v4.local token with two-minute TTL.
   - [ ] Claims limited to MFA verification.
@@ -347,7 +347,7 @@ Exit criteria:
   - [ ] `GET /account/sessions`.
   - [ ] `DELETE /account/sessions/{id}`.
 - [ ] Add tests:
-  - [ ] Access token claims and footers.
+  - [x] Access token claims and footers.
   - [ ] Refresh rotation and reuse detection.
   - [ ] Revocation cache TTL.
   - [ ] Partial token cannot authorize normal APIs.

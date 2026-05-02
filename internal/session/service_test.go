@@ -1,0 +1,324 @@
+package session
+
+import (
+	"bytes"
+	"context"
+	"crypto/sha256"
+	"encoding/base64"
+	"errors"
+	"reflect"
+	"testing"
+	"time"
+
+	gopaseto "aidanwoods.dev/go-paseto"
+	"github.com/google/uuid"
+
+	"github.com/KernelFreeze/aether-auth/internal/account"
+	"github.com/KernelFreeze/aether-auth/internal/auth"
+	"github.com/KernelFreeze/aether-auth/internal/platform/config"
+	"github.com/KernelFreeze/aether-auth/internal/platform/paseto"
+	"github.com/KernelFreeze/aether-auth/internal/testutil"
+)
+
+func TestServiceIssueSessionCreatesFullSessionAndTokens(t *testing.T) {
+	now := time.Date(2026, 5, 2, 14, 30, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000801")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000802")
+	refreshID := uuid.MustParse("018f1f74-10a1-7000-9000-000000000803")
+	accessRandom := bytes.Repeat([]byte{0x11}, randomTokenBytes)
+	refreshRandom := bytes.Repeat([]byte{0x22}, randomTokenBytes)
+	random := bytes.NewReader(append(accessRandom, refreshRandom...))
+	store := &fakeStore{}
+	tokens := &fakeTokenIssuer{accessToken: "signed-access-token"}
+	service := NewService(ServiceDeps{
+		Store:  store,
+		Tokens: tokens,
+		Random: random,
+		IDs: fixedIDs{
+			sessionIDs: []account.SessionID{sessionID},
+			refreshIDs: []uuid.UUID{
+				refreshID,
+			},
+		},
+		Config: Config{
+			Issuer:          "https://auth.example.test",
+			DefaultAudience: []string{"https://api.example.test"},
+			DefaultScopes:   []string{"openid", "profile"},
+			AccessTTL:       15 * time.Minute,
+			RefreshSliding:  30 * 24 * time.Hour,
+			RefreshAbsolute: 90 * 24 * time.Hour,
+		},
+	})
+
+	result, err := service.IssueSession(context.Background(), auth.SessionIssueRequest{
+		AccountID:       accountID,
+		VerifiedFactors: []account.FactorKind{account.FactorKindUser, account.FactorKindPassword, account.FactorKindPassword},
+		IP:              "203.0.113.10",
+		UserAgent:       "session-test",
+		Now:             now,
+	})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+
+	if result.SessionID != sessionID || result.AccessToken != "signed-access-token" || result.ExpiresAt != now.Add(15*time.Minute) {
+		t.Fatalf("session result = %#v", result)
+	}
+	decodedRefresh, err := base64.RawURLEncoding.DecodeString(result.RefreshToken)
+	if err != nil {
+		t.Fatalf("decode refresh token: %v", err)
+	}
+	if !bytes.Equal(decodedRefresh, refreshRandom) {
+		t.Fatalf("refresh token bytes = %x, want %x", decodedRefresh, refreshRandom)
+	}
+	refreshHash := sha256.Sum256(decodedRefresh)
+	if !bytes.Equal(store.full.RefreshToken.TokenHash, refreshHash[:]) {
+		t.Fatalf("stored refresh hash = %x, want %x", store.full.RefreshToken.TokenHash, refreshHash)
+	}
+	if bytes.Contains(store.full.RefreshToken.TokenHash, decodedRefresh) {
+		t.Fatal("stored refresh token must be a hash, not token material")
+	}
+
+	if !store.fullCalled {
+		t.Fatal("full session was not persisted")
+	}
+	if store.full.Session.ID != sessionID || store.full.Session.AccountID != accountID || store.full.Session.Kind != sessionKindFull {
+		t.Fatalf("stored session = %#v", store.full.Session)
+	}
+	if store.full.Session.ExpiresAt != now.Add(90*24*time.Hour) {
+		t.Fatalf("stored session expiry = %s", store.full.Session.ExpiresAt)
+	}
+	if store.full.UserAgent.FingerprintID == "" || store.full.UserAgent.IP != "203.0.113.10" || store.full.UserAgent.Description != "session-test" {
+		t.Fatalf("stored user agent = %#v", store.full.UserAgent)
+	}
+	if got := factorKinds(store.full.Factors); !reflect.DeepEqual(got, []account.FactorKind{account.FactorKindUser, account.FactorKindPassword}) {
+		t.Fatalf("stored factors = %#v", got)
+	}
+	if store.full.RefreshToken.ID != refreshID || store.full.RefreshToken.SessionID != sessionID {
+		t.Fatalf("stored refresh token = %#v", store.full.RefreshToken)
+	}
+
+	claims := tokens.access.Claims
+	if claims["sub"] != accountID.String() || claims["sid"] != sessionID.String() || claims["iss"] != "https://auth.example.test" {
+		t.Fatalf("access claims = %#v", claims)
+	}
+	if claims["scope"] != "openid profile" {
+		t.Fatalf("scope claim = %#v", claims["scope"])
+	}
+	if !reflect.DeepEqual(claims["aud"], []string{"https://api.example.test"}) {
+		t.Fatalf("audience claim = %#v", claims["aud"])
+	}
+	if tokens.access.Implicit == nil || bytes.Contains(tokens.access.Implicit, []byte(result.RefreshToken)) {
+		t.Fatalf("implicit assertion = %q", string(tokens.access.Implicit))
+	}
+}
+
+func TestServiceIssuePartialSessionCreatesBoundToken(t *testing.T) {
+	now := time.Date(2026, 5, 2, 15, 0, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000811")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000812")
+	random := bytes.NewReader(bytes.Repeat([]byte{0x33}, randomTokenBytes))
+	store := &fakeStore{}
+	tokens := &fakeTokenIssuer{partialToken: "encrypted-partial-token"}
+	service := NewService(ServiceDeps{
+		Store:  store,
+		Tokens: tokens,
+		Random: random,
+		IDs: fixedIDs{
+			sessionIDs: []account.SessionID{sessionID},
+		},
+		Config: Config{
+			Issuer:     "https://auth.example.test",
+			PartialTTL: 2 * time.Minute,
+		},
+	})
+
+	result, err := service.IssuePartialSession(context.Background(), auth.PartialSessionIssueRequest{
+		AccountID:         accountID,
+		VerifiedFactors:   []account.FactorKind{account.FactorKindUser, account.FactorKindPassword},
+		ChallengeBindings: []string{"password-check"},
+		Now:               now,
+	})
+	if err != nil {
+		t.Fatalf("issue partial session: %v", err)
+	}
+
+	if result.SessionID != sessionID || result.Token != "encrypted-partial-token" || result.ExpiresAt != now.Add(2*time.Minute) {
+		t.Fatalf("partial result = %#v", result)
+	}
+	if !store.partialCalled {
+		t.Fatal("partial session was not persisted")
+	}
+	if store.partial.Session.Kind != sessionKindPartial || store.partial.Session.TokenID == "" {
+		t.Fatalf("partial session = %#v", store.partial.Session)
+	}
+	if got := factorKinds(store.partial.Factors); !reflect.DeepEqual(got, []account.FactorKind{account.FactorKindUser, account.FactorKindPassword}) {
+		t.Fatalf("partial factors = %#v", got)
+	}
+	claims := tokens.partial.Claims
+	if claims["typ"] != "partial_session" || claims["sub"] != accountID.String() || claims["sid"] != sessionID.String() {
+		t.Fatalf("partial claims = %#v", claims)
+	}
+	if !reflect.DeepEqual(claims["challenge_bindings"], []string{"password-check"}) {
+		t.Fatalf("challenge bindings = %#v", claims["challenge_bindings"])
+	}
+}
+
+func TestServiceIssueSessionAccessTokenVerifiesWithKeystore(t *testing.T) {
+	now := time.Date(2026, 5, 2, 16, 0, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000831")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000832")
+	service := NewService(ServiceDeps{
+		Store:  &fakeStore{},
+		Tokens: newTestKeystore(t),
+		Random: bytes.NewReader(bytes.Repeat([]byte{0x44}, randomTokenBytes*2)),
+		IDs: fixedIDs{
+			sessionIDs: []account.SessionID{sessionID},
+			refreshIDs: []uuid.UUID{
+				uuid.MustParse("018f1f74-10a1-7000-9000-000000000833"),
+			},
+		},
+		Config: Config{
+			Issuer:          "https://auth.example.test",
+			DefaultAudience: []string{"https://api.example.test"},
+			DefaultScopes:   []string{"openid", "profile"},
+			AccessTTL:       time.Minute,
+		},
+	})
+
+	result, err := service.IssueSession(context.Background(), auth.SessionIssueRequest{
+		AccountID:       accountID,
+		VerifiedFactors: []account.FactorKind{account.FactorKindUser, account.FactorKindPassword},
+		Now:             now,
+	})
+	if err != nil {
+		t.Fatalf("issue session: %v", err)
+	}
+
+	token, err := service.tokens.(*paseto.Keystore).VerifyAccessToken(
+		context.Background(),
+		result.AccessToken,
+		implicitAssertion("access", accountID, sessionID, account.ClientID{}),
+		gopaseto.Subject(accountID.String()),
+	)
+	if err != nil {
+		t.Fatalf("verify access token: %v", err)
+	}
+	var sid string
+	if err := token.Get("sid", &sid); err != nil || sid != sessionID.String() {
+		t.Fatalf("sid claim = %q, %v", sid, err)
+	}
+}
+
+func TestServiceIssueSessionValidatesRequiredDependencies(t *testing.T) {
+	service := NewService(ServiceDeps{})
+
+	_, err := service.IssueSession(context.Background(), auth.SessionIssueRequest{
+		AccountID: mustAccountID(t, "018f1f74-10a1-7000-9000-000000000821"),
+	})
+	if !errors.Is(err, auth.ErrInternal) {
+		t.Fatalf("issue session error = %v, want internal", err)
+	}
+
+	service = NewService(ServiceDeps{Store: &fakeStore{}, Tokens: &fakeTokenIssuer{accessToken: "token"}})
+	_, err = service.IssueSession(context.Background(), auth.SessionIssueRequest{})
+	if !errors.Is(err, auth.ErrMalformedInput) {
+		t.Fatalf("missing account error = %v, want malformed input", err)
+	}
+}
+
+type fakeStore struct {
+	fullCalled    bool
+	partialCalled bool
+	full          FullSessionRecord
+	partial       PartialSessionRecord
+}
+
+func (s *fakeStore) CreateFullSession(_ context.Context, record FullSessionRecord) error {
+	s.fullCalled = true
+	s.full = record
+	return nil
+}
+
+func (s *fakeStore) CreatePartialSession(_ context.Context, record PartialSessionRecord) error {
+	s.partialCalled = true
+	s.partial = record
+	return nil
+}
+
+type fakeTokenIssuer struct {
+	accessToken  string
+	partialToken string
+	access       paseto.IssueRequest
+	partial      paseto.IssueRequest
+}
+
+func (i *fakeTokenIssuer) IssueAccessToken(_ context.Context, req paseto.IssueRequest) (string, error) {
+	i.access = req
+	return i.accessToken, nil
+}
+
+func (i *fakeTokenIssuer) IssuePartialSessionToken(_ context.Context, req paseto.IssueRequest) (string, error) {
+	i.partial = req
+	return i.partialToken, nil
+}
+
+type fixedIDs struct {
+	sessionIDs []account.SessionID
+	refreshIDs []uuid.UUID
+}
+
+func (g fixedIDs) NewSessionID() (account.SessionID, error) {
+	if len(g.sessionIDs) == 0 {
+		return account.SessionID{}, errors.New("no session ids")
+	}
+	return g.sessionIDs[0], nil
+}
+
+func (g fixedIDs) NewRefreshTokenID() (uuid.UUID, error) {
+	if len(g.refreshIDs) == 0 {
+		return uuid.Nil, errors.New("no refresh ids")
+	}
+	return g.refreshIDs[0], nil
+}
+
+func factorKinds(records []FactorRecord) []account.FactorKind {
+	kinds := make([]account.FactorKind, 0, len(records))
+	for _, record := range records {
+		kinds = append(kinds, record.Kind)
+	}
+	return kinds
+}
+
+func mustAccountID(t *testing.T, value string) account.AccountID {
+	t.Helper()
+	id, err := account.ParseAccountID(value)
+	if err != nil {
+		t.Fatalf("parse account id: %v", err)
+	}
+	return id
+}
+
+func mustSessionID(t *testing.T, value string) account.SessionID {
+	t.Helper()
+	id, err := account.ParseSessionID(value)
+	if err != nil {
+		t.Fatalf("parse session id: %v", err)
+	}
+	return id
+}
+
+func newTestKeystore(t *testing.T) *paseto.Keystore {
+	t.Helper()
+	ks, err := paseto.NewKeystore(context.Background(), config.PASETOConfig{}, testutil.StaticSecrets{
+		"env://LOCAL": bytes.Repeat([]byte{0x11}, 32),
+		"env://SEED":  bytes.Repeat([]byte{0x22}, 32),
+	}, paseto.Refs{
+		LocalKey:   "env://LOCAL",
+		PublicSeed: "env://SEED",
+	})
+	if err != nil {
+		t.Fatalf("new keystore: %v", err)
+	}
+	return ks
+}
