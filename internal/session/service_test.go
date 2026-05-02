@@ -178,6 +178,9 @@ func TestServiceRefreshSessionRotatesTokenAndIssuesReplacementTokens(t *testing.
 	if store.rotation.NewRefreshTokenID != refreshID || !bytes.Equal(store.rotation.NewTokenHash, newRefreshHash[:]) {
 		t.Fatalf("rotation = %#v", store.rotation)
 	}
+	if store.rotation.NewAccessTokenID == "" {
+		t.Fatal("rotation did not receive replacement access token id")
+	}
 	decodedRefresh, err := base64.RawURLEncoding.DecodeString(result.RefreshToken)
 	if err != nil {
 		t.Fatalf("decode refreshed token: %v", err)
@@ -206,7 +209,7 @@ func TestServiceRefreshSessionRejectsReusedToken(t *testing.T) {
 	service := NewService(ServiceDeps{
 		Store:  store,
 		Tokens: tokens,
-		Random: bytes.NewReader(bytes.Repeat([]byte{0x99}, randomTokenBytes)),
+		Random: bytes.NewReader(bytes.Repeat([]byte{0x99}, randomTokenBytes*2)),
 		IDs: fixedIDs{
 			refreshIDs: []uuid.UUID{uuid.MustParse("018f1f74-10a1-7000-9000-000000000853")},
 		},
@@ -275,7 +278,7 @@ func TestServiceIssuePartialSessionCreatesBoundToken(t *testing.T) {
 }
 
 func TestServiceIssueSessionAccessTokenVerifiesWithKeystore(t *testing.T) {
-	now := time.Date(2026, 5, 2, 16, 0, 0, 0, time.UTC)
+	now := time.Now().UTC()
 	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000831")
 	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000832")
 	service := NewService(ServiceDeps{
@@ -320,6 +323,117 @@ func TestServiceIssueSessionAccessTokenVerifiesWithKeystore(t *testing.T) {
 	}
 }
 
+func TestServiceRevokeSessionCachesCurrentAccessToken(t *testing.T) {
+	now := time.Date(2026, 5, 2, 19, 0, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000881")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000882")
+	store := &fakeStore{
+		revoked: SessionRecord{
+			ID:        sessionID,
+			AccountID: accountID,
+			Kind:      sessionKindFull,
+			Status:    sessionStatusRevoked,
+			TokenID:   "access-jti",
+			ExpiresAt: now.Add(90 * 24 * time.Hour),
+		},
+	}
+	revocations := &fakeRevocationCache{}
+	service := NewService(ServiceDeps{
+		Store:       store,
+		Revocations: revocations,
+		Clock:       testutil.NewFakeClock(now),
+		Config: Config{
+			AccessTTL:     15 * time.Minute,
+			RevocationTTL: 7 * time.Minute,
+		},
+	})
+
+	result, err := service.RevokeSession(context.Background(), RevokeSessionRequest{
+		SessionID: sessionID,
+		AccountID: accountID,
+	})
+	if err != nil {
+		t.Fatalf("revoke session: %v", err)
+	}
+
+	if result.SessionID != sessionID || result.AccountID != accountID || result.RevokedAt != now {
+		t.Fatalf("revocation result = %#v", result)
+	}
+	if !store.revocationCalled || store.revocation.AccountID != accountID || store.revocation.SessionID != sessionID {
+		t.Fatalf("store revocation = %#v", store.revocation)
+	}
+	if revocations.tokenID != "access-jti" || revocations.ttl != 7*time.Minute {
+		t.Fatalf("revocation cache = token %q ttl %s", revocations.tokenID, revocations.ttl)
+	}
+}
+
+func TestServiceRevokeAccountSessionsSupportsPasswordChangeRevocation(t *testing.T) {
+	now := time.Date(2026, 5, 2, 19, 30, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000891")
+	firstSession := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000892")
+	secondSession := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000893")
+	store := &fakeStore{
+		accountRevoked: []SessionRecord{
+			{ID: firstSession, AccountID: accountID, TokenID: "first-jti"},
+			{ID: secondSession, AccountID: accountID, TokenID: "second-jti"},
+		},
+	}
+	revocations := &fakeRevocationCache{}
+	service := NewService(ServiceDeps{
+		Store:       store,
+		Revocations: revocations,
+		Clock:       testutil.NewFakeClock(now),
+		Config:      Config{AccessTTL: 15 * time.Minute},
+	})
+
+	result, err := service.RevokeAccountSessions(context.Background(), RevokeAccountSessionsRequest{AccountID: accountID})
+	if err != nil {
+		t.Fatalf("revoke account sessions: %v", err)
+	}
+
+	if len(result.Sessions) != 2 {
+		t.Fatalf("revoked sessions length = %d, want 2", len(result.Sessions))
+	}
+	if !store.accountRevocationCalled || store.accountRevocation.AccountID != accountID {
+		t.Fatalf("account revocation = %#v", store.accountRevocation)
+	}
+	if !reflect.DeepEqual(revocations.tokens, []string{"first-jti", "second-jti"}) {
+		t.Fatalf("revoked token ids = %#v", revocations.tokens)
+	}
+	if revocations.ttl != 15*time.Minute {
+		t.Fatalf("revocation ttl = %s, want 15m", revocations.ttl)
+	}
+}
+
+func TestServiceAdminRevokeSessionDoesNotRequireAccountScope(t *testing.T) {
+	now := time.Date(2026, 5, 2, 20, 0, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000901")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000902")
+	store := &fakeStore{
+		revoked: SessionRecord{
+			ID:        sessionID,
+			AccountID: accountID,
+			TokenID:   "admin-revoked-jti",
+		},
+	}
+	service := NewService(ServiceDeps{
+		Store:       store,
+		Revocations: &fakeRevocationCache{},
+		Clock:       testutil.NewFakeClock(now),
+	})
+
+	result, err := service.AdminRevokeSession(context.Background(), AdminRevokeSessionRequest{SessionID: sessionID})
+	if err != nil {
+		t.Fatalf("admin revoke session: %v", err)
+	}
+	if result.SessionID != sessionID || result.AccountID != accountID {
+		t.Fatalf("admin revoke result = %#v", result)
+	}
+	if !store.revocationCalled || !store.revocation.AccountID.IsZero() {
+		t.Fatalf("admin store revocation = %#v", store.revocation)
+	}
+}
+
 func TestServiceIssueSessionValidatesRequiredDependencies(t *testing.T) {
 	service := NewService(ServiceDeps{})
 
@@ -338,14 +452,20 @@ func TestServiceIssueSessionValidatesRequiredDependencies(t *testing.T) {
 }
 
 type fakeStore struct {
-	fullCalled     bool
-	partialCalled  bool
-	rotationCalled bool
-	full           FullSessionRecord
-	partial        PartialSessionRecord
-	rotation       RefreshTokenRotation
-	rotationResult RefreshTokenRotationResult
-	rotationErr    error
+	fullCalled              bool
+	partialCalled           bool
+	rotationCalled          bool
+	revocationCalled        bool
+	accountRevocationCalled bool
+	full                    FullSessionRecord
+	partial                 PartialSessionRecord
+	rotation                RefreshTokenRotation
+	revocation              SessionRevocation
+	accountRevocation       AccountSessionsRevocation
+	rotationResult          RefreshTokenRotationResult
+	revoked                 SessionRecord
+	accountRevoked          []SessionRecord
+	rotationErr             error
 }
 
 func (s *fakeStore) CreateFullSession(_ context.Context, record FullSessionRecord) error {
@@ -360,6 +480,28 @@ func (s *fakeStore) CreatePartialSession(_ context.Context, record PartialSessio
 	return nil
 }
 
+func (s *fakeStore) GetActiveSession(_ context.Context, sessionID account.SessionID, _ time.Time) (SessionRecord, error) {
+	if s.revoked.ID == sessionID {
+		return s.revoked, nil
+	}
+	return SessionRecord{}, auth.ErrInvalidCredentials
+}
+
+func (s *fakeStore) RevokeSession(_ context.Context, revocation SessionRevocation) (SessionRecord, error) {
+	s.revocationCalled = true
+	s.revocation = revocation
+	if s.revoked.ID.IsZero() {
+		return SessionRecord{}, auth.ErrInvalidCredentials
+	}
+	return s.revoked, nil
+}
+
+func (s *fakeStore) RevokeAccountSessions(_ context.Context, revocation AccountSessionsRevocation) ([]SessionRecord, error) {
+	s.accountRevocationCalled = true
+	s.accountRevocation = revocation
+	return append([]SessionRecord(nil), s.accountRevoked...), nil
+}
+
 func (s *fakeStore) RotateRefreshToken(_ context.Context, rotation RefreshTokenRotation) (RefreshTokenRotationResult, error) {
 	s.rotationCalled = true
 	s.rotation = rotation
@@ -370,6 +512,25 @@ func (s *fakeStore) RotateRefreshToken(_ context.Context, rotation RefreshTokenR
 	result.RefreshToken.ID = rotation.NewRefreshTokenID
 	result.RefreshToken.TokenHash = append([]byte(nil), rotation.NewTokenHash...)
 	return result, nil
+}
+
+type fakeRevocationCache struct {
+	tokenID string
+	tokens  []string
+	ttl     time.Duration
+	revoked bool
+	err     error
+}
+
+func (c *fakeRevocationCache) RevokeAccessToken(_ context.Context, tokenID string, ttl time.Duration) error {
+	c.tokenID = tokenID
+	c.tokens = append(c.tokens, tokenID)
+	c.ttl = ttl
+	return c.err
+}
+
+func (c *fakeRevocationCache) IsAccessTokenRevoked(context.Context, string) (bool, error) {
+	return c.revoked, c.err
 }
 
 type fakeTokenIssuer struct {
@@ -434,7 +595,7 @@ func mustSessionID(t *testing.T, value string) account.SessionID {
 	return id
 }
 
-func newTestKeystore(t *testing.T) *paseto.Keystore {
+func newTestKeystore(t testing.TB) *paseto.Keystore {
 	t.Helper()
 	ks, err := paseto.NewKeystore(context.Background(), config.PASETOConfig{}, testutil.StaticSecrets{
 		"env://LOCAL": bytes.Repeat([]byte{0x11}, 32),

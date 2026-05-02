@@ -189,6 +189,40 @@ func (q *Queries) CreateSessionFactor(ctx context.Context, arg CreateSessionFact
 	return i, err
 }
 
+const getActiveSessionByID = `-- name: GetActiveSessionByID :one
+SELECT id, account_id, client_id, kind, status, token_id, user_agent_id, ip, expires_at, revoked_at, created_at, updated_at
+FROM sessions
+WHERE id = $1
+  AND kind = 'full'
+  AND status = 'active'
+  AND expires_at > $2
+`
+
+type GetActiveSessionByIDParams struct {
+	ID       pgtype.UUID        `json:"id"`
+	ActiveAt pgtype.Timestamptz `json:"active_at"`
+}
+
+func (q *Queries) GetActiveSessionByID(ctx context.Context, arg GetActiveSessionByIDParams) (Session, error) {
+	row := q.db.QueryRow(ctx, getActiveSessionByID, arg.ID, arg.ActiveAt)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.ClientID,
+		&i.Kind,
+		&i.Status,
+		&i.TokenID,
+		&i.UserAgentID,
+		&i.Ip,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getRefreshTokenByHash = `-- name: GetRefreshTokenByHash :one
 SELECT id, session_id, parent_id, client_id, token_hash, scopes, expires_at, absolute_expires_at, rotated_at, revoked_at, created_at
 FROM refresh_tokens
@@ -464,6 +498,100 @@ func (q *Queries) RevokeRefreshTokenChain(ctx context.Context, arg RevokeRefresh
 	return items, nil
 }
 
+const revokeRefreshTokensByAccount = `-- name: RevokeRefreshTokensByAccount :many
+UPDATE refresh_tokens
+SET revoked_at = $1
+WHERE session_id IN (
+    SELECT id
+    FROM sessions
+    WHERE account_id = $2
+)
+  AND revoked_at IS NULL
+RETURNING id, session_id, parent_id, client_id, token_hash, scopes, expires_at, absolute_expires_at, rotated_at, revoked_at, created_at
+`
+
+type RevokeRefreshTokensByAccountParams struct {
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	AccountID pgtype.UUID        `json:"account_id"`
+}
+
+func (q *Queries) RevokeRefreshTokensByAccount(ctx context.Context, arg RevokeRefreshTokensByAccountParams) ([]RefreshToken, error) {
+	rows, err := q.db.Query(ctx, revokeRefreshTokensByAccount, arg.RevokedAt, arg.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RefreshToken{}
+	for rows.Next() {
+		var i RefreshToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.ParentID,
+			&i.ClientID,
+			&i.TokenHash,
+			&i.Scopes,
+			&i.ExpiresAt,
+			&i.AbsoluteExpiresAt,
+			&i.RotatedAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
+const revokeRefreshTokensBySession = `-- name: RevokeRefreshTokensBySession :many
+UPDATE refresh_tokens
+SET revoked_at = $1
+WHERE session_id = $2
+  AND revoked_at IS NULL
+RETURNING id, session_id, parent_id, client_id, token_hash, scopes, expires_at, absolute_expires_at, rotated_at, revoked_at, created_at
+`
+
+type RevokeRefreshTokensBySessionParams struct {
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	SessionID pgtype.UUID        `json:"session_id"`
+}
+
+func (q *Queries) RevokeRefreshTokensBySession(ctx context.Context, arg RevokeRefreshTokensBySessionParams) ([]RefreshToken, error) {
+	rows, err := q.db.Query(ctx, revokeRefreshTokensBySession, arg.RevokedAt, arg.SessionID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []RefreshToken{}
+	for rows.Next() {
+		var i RefreshToken
+		if err := rows.Scan(
+			&i.ID,
+			&i.SessionID,
+			&i.ParentID,
+			&i.ClientID,
+			&i.TokenHash,
+			&i.Scopes,
+			&i.ExpiresAt,
+			&i.AbsoluteExpiresAt,
+			&i.RotatedAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const revokeSession = `-- name: RevokeSession :one
 UPDATE sessions
 SET status = 'revoked',
@@ -498,6 +626,90 @@ func (q *Queries) RevokeSession(ctx context.Context, arg RevokeSessionParams) (S
 	return i, err
 }
 
+const revokeSessionForAccount = `-- name: RevokeSessionForAccount :one
+UPDATE sessions
+SET status = 'revoked',
+    revoked_at = $1
+WHERE id = $2
+  AND account_id = $3
+  AND status = 'active'
+RETURNING id, account_id, client_id, kind, status, token_id, user_agent_id, ip, expires_at, revoked_at, created_at, updated_at
+`
+
+type RevokeSessionForAccountParams struct {
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	ID        pgtype.UUID        `json:"id"`
+	AccountID pgtype.UUID        `json:"account_id"`
+}
+
+func (q *Queries) RevokeSessionForAccount(ctx context.Context, arg RevokeSessionForAccountParams) (Session, error) {
+	row := q.db.QueryRow(ctx, revokeSessionForAccount, arg.RevokedAt, arg.ID, arg.AccountID)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.ClientID,
+		&i.Kind,
+		&i.Status,
+		&i.TokenID,
+		&i.UserAgentID,
+		&i.Ip,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
+const revokeSessionsByAccount = `-- name: RevokeSessionsByAccount :many
+UPDATE sessions
+SET status = 'revoked',
+    revoked_at = $1
+WHERE account_id = $2
+  AND kind = 'full'
+  AND status = 'active'
+RETURNING id, account_id, client_id, kind, status, token_id, user_agent_id, ip, expires_at, revoked_at, created_at, updated_at
+`
+
+type RevokeSessionsByAccountParams struct {
+	RevokedAt pgtype.Timestamptz `json:"revoked_at"`
+	AccountID pgtype.UUID        `json:"account_id"`
+}
+
+func (q *Queries) RevokeSessionsByAccount(ctx context.Context, arg RevokeSessionsByAccountParams) ([]Session, error) {
+	rows, err := q.db.Query(ctx, revokeSessionsByAccount, arg.RevokedAt, arg.AccountID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []Session{}
+	for rows.Next() {
+		var i Session
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.ClientID,
+			&i.Kind,
+			&i.Status,
+			&i.TokenID,
+			&i.UserAgentID,
+			&i.Ip,
+			&i.ExpiresAt,
+			&i.RevokedAt,
+			&i.CreatedAt,
+			&i.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const rotateRefreshToken = `-- name: RotateRefreshToken :one
 UPDATE refresh_tokens
 SET rotated_at = $1
@@ -527,6 +739,40 @@ func (q *Queries) RotateRefreshToken(ctx context.Context, arg RotateRefreshToken
 		&i.RotatedAt,
 		&i.RevokedAt,
 		&i.CreatedAt,
+	)
+	return i, err
+}
+
+const updateSessionAccessToken = `-- name: UpdateSessionAccessToken :one
+UPDATE sessions
+SET token_id = $1
+WHERE id = $2
+  AND kind = 'full'
+  AND status = 'active'
+RETURNING id, account_id, client_id, kind, status, token_id, user_agent_id, ip, expires_at, revoked_at, created_at, updated_at
+`
+
+type UpdateSessionAccessTokenParams struct {
+	TokenID *string     `json:"token_id"`
+	ID      pgtype.UUID `json:"id"`
+}
+
+func (q *Queries) UpdateSessionAccessToken(ctx context.Context, arg UpdateSessionAccessTokenParams) (Session, error) {
+	row := q.db.QueryRow(ctx, updateSessionAccessToken, arg.TokenID, arg.ID)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.ClientID,
+		&i.Kind,
+		&i.Status,
+		&i.TokenID,
+		&i.UserAgentID,
+		&i.Ip,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
 	)
 	return i, err
 }

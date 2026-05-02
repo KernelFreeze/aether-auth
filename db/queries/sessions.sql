@@ -45,6 +45,14 @@ SELECT *
 FROM sessions
 WHERE id = sqlc.arg(id);
 
+-- name: GetActiveSessionByID :one
+SELECT *
+FROM sessions
+WHERE id = sqlc.arg(id)
+  AND kind = 'full'
+  AND status = 'active'
+  AND expires_at > sqlc.arg(active_at);
+
 -- name: ListSessionsByAccount :many
 SELECT *
 FROM sessions
@@ -65,6 +73,32 @@ UPDATE sessions
 SET status = 'revoked',
     revoked_at = sqlc.arg(revoked_at)
 WHERE id = sqlc.arg(id)
+  AND status = 'active'
+RETURNING *;
+
+-- name: RevokeSessionForAccount :one
+UPDATE sessions
+SET status = 'revoked',
+    revoked_at = sqlc.arg(revoked_at)
+WHERE id = sqlc.arg(id)
+  AND account_id = sqlc.arg(account_id)
+  AND status = 'active'
+RETURNING *;
+
+-- name: RevokeSessionsByAccount :many
+UPDATE sessions
+SET status = 'revoked',
+    revoked_at = sqlc.arg(revoked_at)
+WHERE account_id = sqlc.arg(account_id)
+  AND kind = 'full'
+  AND status = 'active'
+RETURNING *;
+
+-- name: UpdateSessionAccessToken :one
+UPDATE sessions
+SET token_id = sqlc.arg(token_id)
+WHERE id = sqlc.arg(id)
+  AND kind = 'full'
   AND status = 'active'
 RETURNING *;
 
@@ -133,6 +167,24 @@ RETURNING *;
 UPDATE refresh_tokens
 SET revoked_at = sqlc.arg(revoked_at)
 WHERE id = sqlc.arg(id)
+  AND revoked_at IS NULL
+RETURNING *;
+
+-- name: RevokeRefreshTokensBySession :many
+UPDATE refresh_tokens
+SET revoked_at = sqlc.arg(revoked_at)
+WHERE session_id = sqlc.arg(session_id)
+  AND revoked_at IS NULL
+RETURNING *;
+
+-- name: RevokeRefreshTokensByAccount :many
+UPDATE refresh_tokens
+SET revoked_at = sqlc.arg(revoked_at)
+WHERE session_id IN (
+    SELECT id
+    FROM sessions
+    WHERE account_id = sqlc.arg(account_id)
+)
   AND revoked_at IS NULL
 RETURNING *;
 

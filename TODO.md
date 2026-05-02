@@ -338,25 +338,25 @@ Exit criteria:
   - [x] Rotate refresh token on every use.
   - [x] Detect reused refresh tokens.
   - [x] Revoke the whole rotation chain on reuse.
-- [ ] Implement session revocation:
-  - [ ] User-initiated session deletion.
-  - [ ] Password-change revocation.
-  - [ ] Admin revocation hook for later organization work.
-  - [ ] Redis revocation set keyed by access-token `jti`.
+- [x] Implement session revocation:
+  - [x] User-initiated session deletion.
+  - [x] Password-change revocation.
+  - [x] Admin revocation hook for later organization work.
+  - [x] Redis revocation set keyed by access-token `jti`.
 - [ ] Add account session APIs:
   - [ ] `GET /account/sessions`.
   - [ ] `DELETE /account/sessions/{id}`.
 - [ ] Add tests:
   - [x] Access token claims and footers.
   - [x] Refresh rotation and reuse detection.
-  - [ ] Revocation cache TTL.
-  - [ ] Partial token cannot authorize normal APIs.
+  - [x] Revocation cache TTL.
+  - [x] Partial token cannot authorize normal APIs.
 
 Exit criteria:
 
 - [x] Password login can produce usable access and refresh tokens.
 - [x] Refresh token reuse terminates the session family.
-- [ ] Revoked access-token IDs are rejected by middleware.
+- [x] Revoked access-token IDs are rejected by middleware.
 
 ## Stage 7: MFA factor model, TOTP, and recovery codes
 

@@ -91,21 +91,26 @@ func run() error {
 		log.Warn("paseto keystore not initialized", zap.Error(err))
 	}
 	var tokenIssuer session.TokenIssuer
+	var accessVerifier session.AccessTokenVerifier
 	if keystore != nil {
 		tokenIssuer = keystore
+		accessVerifier = keystore
 	}
 
 	queries := sqlc.New(pool)
 	rateLimiter := ratelimit.NewRedisChecker(rdb, ratelimit.ConfigFrom(cfg.RateLimits))
+	revocationCache := session.NewRedisRevocationCache(rdb)
 	passwordService, err := newPasswordService(ctx, cfg, sec, pool, queries, rdb)
 	if err != nil {
 		return err
 	}
+	sessionStore := session.NewSQLStore(pool, queries)
 	sessionIssuer := session.NewService(session.ServiceDeps{
-		Store:  session.NewSQLStore(pool, queries),
-		Tokens: tokenIssuer,
-		Random: rand.Reader,
-		Config: session.ConfigFrom(cfg),
+		Store:       sessionStore,
+		Tokens:      tokenIssuer,
+		Revocations: revocationCache,
+		Random:      rand.Reader,
+		Config:      session.ConfigFrom(cfg),
 	})
 	orchestrator, err := auth.NewOrchestratorWithDeps(auth.OrchestratorDeps{
 		Accounts:          auth.NewSQLAccountRepository(queries),
@@ -151,6 +156,12 @@ func run() error {
 			}),
 		},
 		Middlewares: httpapi.Middlewares{
+			Authenticate: session.NewAuthenticationMiddleware(session.AuthenticationDeps{
+				Tokens:      accessVerifier,
+				Sessions:    sessionStore,
+				Revocations: revocationCache,
+				Issuer:      cfg.Issuer.URL,
+			}),
 			RateLimit: ratelimit.NewMiddleware(rateLimiter),
 		},
 	})

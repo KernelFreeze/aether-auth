@@ -95,14 +95,135 @@ func (s *SQLStore) CreatePartialSession(ctx context.Context, record PartialSessi
 	return nil
 }
 
+// GetActiveSession loads an active full session for authentication middleware.
+func (s *SQLStore) GetActiveSession(ctx context.Context, sessionID account.SessionID, activeAt time.Time) (SessionRecord, error) {
+	if err := s.ready(); err != nil {
+		return SessionRecord{}, err
+	}
+	if sessionID.IsZero() {
+		return SessionRecord{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "session id is required", nil)
+	}
+	activeAt = account.NormalizeTimestamp(activeAt)
+	if activeAt.IsZero() {
+		activeAt = account.NormalizeTimestamp(time.Now())
+	}
+	row, err := s.queries.GetActiveSessionByID(ctx, sqlc.GetActiveSessionByIDParams{
+		ID:       sessionIDToPG(sessionID),
+		ActiveAt: timeToTimestamptz(activeAt),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SessionRecord{}, auth.ErrInvalidCredentials
+	}
+	if err != nil {
+		return SessionRecord{}, fmt.Errorf("session: lookup active session: %w", err)
+	}
+	return sessionRecordFromSQL(row), nil
+}
+
+// RevokeSession revokes one active session and its refresh tokens. AccountID is
+// optional; when set, the session must belong to that account.
+func (s *SQLStore) RevokeSession(ctx context.Context, revocation SessionRevocation) (SessionRecord, error) {
+	if err := s.ready(); err != nil {
+		return SessionRecord{}, err
+	}
+	if revocation.SessionID.IsZero() {
+		return SessionRecord{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "session id is required", nil)
+	}
+	now := account.NormalizeTimestamp(revocation.RevokedAt)
+	if now.IsZero() {
+		now = account.NormalizeTimestamp(time.Now())
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return SessionRecord{}, fmt.Errorf("session: begin revocation transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.queries.WithTx(tx)
+	var row sqlc.Session
+	if revocation.AccountID.IsZero() {
+		row, err = q.RevokeSession(ctx, sqlc.RevokeSessionParams{
+			ID:        sessionIDToPG(revocation.SessionID),
+			RevokedAt: timeToTimestamptz(now),
+		})
+	} else {
+		row, err = q.RevokeSessionForAccount(ctx, sqlc.RevokeSessionForAccountParams{
+			ID:        sessionIDToPG(revocation.SessionID),
+			AccountID: accountIDToPG(revocation.AccountID),
+			RevokedAt: timeToTimestamptz(now),
+		})
+	}
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SessionRecord{}, auth.ErrInvalidCredentials
+	}
+	if err != nil {
+		return SessionRecord{}, fmt.Errorf("session: revoke session: %w", err)
+	}
+	if _, err := q.RevokeRefreshTokensBySession(ctx, sqlc.RevokeRefreshTokensBySessionParams{
+		SessionID: sessionIDToPG(revocation.SessionID),
+		RevokedAt: timeToTimestamptz(now),
+	}); err != nil {
+		return SessionRecord{}, fmt.Errorf("session: revoke refresh tokens: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return SessionRecord{}, fmt.Errorf("session: commit revocation transaction: %w", err)
+	}
+	return sessionRecordFromSQL(row), nil
+}
+
+// RevokeAccountSessions revokes every active full session for an account and
+// all refresh tokens attached to the account.
+func (s *SQLStore) RevokeAccountSessions(ctx context.Context, revocation AccountSessionsRevocation) ([]SessionRecord, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	if revocation.AccountID.IsZero() {
+		return nil, auth.NewServiceError(auth.ErrorKindMalformedInput, "account id is required", nil)
+	}
+	now := account.NormalizeTimestamp(revocation.RevokedAt)
+	if now.IsZero() {
+		now = account.NormalizeTimestamp(time.Now())
+	}
+
+	tx, err := s.db.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("session: begin account revocation transaction: %w", err)
+	}
+	defer func() { _ = tx.Rollback(ctx) }()
+
+	q := s.queries.WithTx(tx)
+	rows, err := q.RevokeSessionsByAccount(ctx, sqlc.RevokeSessionsByAccountParams{
+		AccountID: accountIDToPG(revocation.AccountID),
+		RevokedAt: timeToTimestamptz(now),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("session: revoke account sessions: %w", err)
+	}
+	if _, err := q.RevokeRefreshTokensByAccount(ctx, sqlc.RevokeRefreshTokensByAccountParams{
+		AccountID: accountIDToPG(revocation.AccountID),
+		RevokedAt: timeToTimestamptz(now),
+	}); err != nil {
+		return nil, fmt.Errorf("session: revoke account refresh tokens: %w", err)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("session: commit account revocation transaction: %w", err)
+	}
+	records := make([]SessionRecord, 0, len(rows))
+	for _, row := range rows {
+		records = append(records, sessionRecordFromSQL(row))
+	}
+	return records, nil
+}
+
 // RotateRefreshToken marks the presented refresh token as used, creates its
 // replacement, and revokes the token family if reuse is detected.
 func (s *SQLStore) RotateRefreshToken(ctx context.Context, rotation RefreshTokenRotation) (RefreshTokenRotationResult, error) {
 	if err := s.ready(); err != nil {
 		return RefreshTokenRotationResult{}, err
 	}
-	if len(rotation.TokenHash) == 0 || rotation.NewRefreshTokenID == uuid.Nil || len(rotation.NewTokenHash) == 0 {
-		return RefreshTokenRotationResult{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "refresh rotation token hashes and id are required", nil)
+	if len(rotation.TokenHash) == 0 || rotation.NewRefreshTokenID == uuid.Nil || len(rotation.NewTokenHash) == 0 || strings.TrimSpace(rotation.NewAccessTokenID) == "" {
+		return RefreshTokenRotationResult{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "refresh rotation token hashes and ids are required", nil)
 	}
 	now := account.NormalizeTimestamp(rotation.RotatedAt)
 	if now.IsZero() {
@@ -174,6 +295,16 @@ func (s *SQLStore) RotateRefreshToken(ctx context.Context, rotation RefreshToken
 	if err := createRefreshTokenRecord(ctx, q, newToken); err != nil {
 		return RefreshTokenRotationResult{}, err
 	}
+	sessionRow, err = q.UpdateSessionAccessToken(ctx, sqlc.UpdateSessionAccessTokenParams{
+		ID:      current.SessionID,
+		TokenID: optionalString(rotation.NewAccessTokenID),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return RefreshTokenRotationResult{}, auth.ErrInvalidCredentials
+	}
+	if err != nil {
+		return RefreshTokenRotationResult{}, fmt.Errorf("session: update access token id: %w", err)
+	}
 	factorRows, err := q.ListSessionFactors(ctx, current.SessionID)
 	if err != nil {
 		return RefreshTokenRotationResult{}, fmt.Errorf("session: list refresh session factors: %w", err)
@@ -214,6 +345,7 @@ type refreshRotationQueries interface {
 	GetRefreshTokenByHash(context.Context, []byte) (sqlc.RefreshToken, error)
 	GetSessionByID(context.Context, pgtype.UUID) (sqlc.Session, error)
 	ListSessionFactors(context.Context, pgtype.UUID) ([]sqlc.SessionFactor, error)
+	UpdateSessionAccessToken(context.Context, sqlc.UpdateSessionAccessTokenParams) (sqlc.Session, error)
 	RevokeRefreshTokenChain(context.Context, sqlc.RevokeRefreshTokenChainParams) ([]sqlc.RefreshToken, error)
 	RevokeSession(context.Context, sqlc.RevokeSessionParams) (sqlc.Session, error)
 	RotateRefreshToken(context.Context, sqlc.RotateRefreshTokenParams) (sqlc.RefreshToken, error)

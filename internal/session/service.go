@@ -43,6 +43,7 @@ type Config struct {
 	RefreshSliding  time.Duration
 	RefreshAbsolute time.Duration
 	PartialTTL      time.Duration
+	RevocationTTL   time.Duration
 }
 
 // ConfigFrom adapts the process configuration to the session service config.
@@ -58,6 +59,7 @@ func ConfigFrom(cfg *config.Config) Config {
 		RefreshSliding:  cfg.Session.RefreshSliding,
 		RefreshAbsolute: cfg.Session.RefreshAbsolute,
 		PartialTTL:      cfg.Session.PartialSessionTTL,
+		RevocationTTL:   cfg.Session.RevocationCacheTTL,
 	}
 }
 
@@ -65,7 +67,16 @@ func ConfigFrom(cfg *config.Config) Config {
 type Store interface {
 	CreateFullSession(context.Context, FullSessionRecord) error
 	CreatePartialSession(context.Context, PartialSessionRecord) error
+	GetActiveSession(context.Context, account.SessionID, time.Time) (SessionRecord, error)
+	RevokeAccountSessions(context.Context, AccountSessionsRevocation) ([]SessionRecord, error)
+	RevokeSession(context.Context, SessionRevocation) (SessionRecord, error)
 	RotateRefreshToken(context.Context, RefreshTokenRotation) (RefreshTokenRotationResult, error)
+}
+
+// AccessTokenRevocationCache stores short-lived revoked access-token IDs.
+type AccessTokenRevocationCache interface {
+	RevokeAccessToken(context.Context, string, time.Duration) error
+	IsAccessTokenRevoked(context.Context, string) (bool, error)
 }
 
 // TokenIssuer creates PASETO tokens for session results.
@@ -143,6 +154,7 @@ type RefreshTokenRotation struct {
 	TokenHash         []byte
 	NewRefreshTokenID uuid.UUID
 	NewTokenHash      []byte
+	NewAccessTokenID  string
 	RotatedAt         time.Time
 	RefreshSliding    time.Duration
 }
@@ -169,26 +181,76 @@ type RefreshSessionResult struct {
 	ExpiresAt    time.Time
 }
 
+// SessionRevocation identifies one session to revoke. AccountID scopes
+// user-initiated revocation to the caller's account; a zero AccountID is
+// reserved for administrative callers.
+type SessionRevocation struct {
+	SessionID account.SessionID
+	AccountID account.AccountID
+	RevokedAt time.Time
+}
+
+// AccountSessionsRevocation identifies all sessions for an account to revoke.
+type AccountSessionsRevocation struct {
+	AccountID account.AccountID
+	RevokedAt time.Time
+}
+
+// RevokeSessionRequest revokes one session owned by the authenticated account.
+type RevokeSessionRequest struct {
+	SessionID account.SessionID
+	AccountID account.AccountID
+	Now       time.Time
+}
+
+// AdminRevokeSessionRequest revokes one session without an account ownership
+// check. It is the service hook later organization-admin work can call.
+type AdminRevokeSessionRequest struct {
+	SessionID account.SessionID
+	Now       time.Time
+}
+
+// RevokeAccountSessionsRequest revokes every full session for an account, such
+// as after a password change or reset.
+type RevokeAccountSessionsRequest struct {
+	AccountID account.AccountID
+	Now       time.Time
+}
+
+// RevokeSessionResult describes a revoked session.
+type RevokeSessionResult struct {
+	SessionID account.SessionID
+	AccountID account.AccountID
+	RevokedAt time.Time
+}
+
+// RevokeAccountSessionsResult describes the sessions revoked for one account.
+type RevokeAccountSessionsResult struct {
+	Sessions []RevokeSessionResult
+}
+
 // Service creates login sessions and token material.
 type Service struct {
-	store  Store
-	tokens TokenIssuer
-	random io.Reader
-	ids    IDGenerator
-	clock  auth.Clock
-	cfg    Config
+	store       Store
+	tokens      TokenIssuer
+	revocations AccessTokenRevocationCache
+	random      io.Reader
+	ids         IDGenerator
+	clock       auth.Clock
+	cfg         Config
 }
 
 var _ auth.SessionIssuer = (*Service)(nil)
 
 // ServiceDeps contains collaborators for session issuance.
 type ServiceDeps struct {
-	Store  Store
-	Tokens TokenIssuer
-	Random io.Reader
-	IDs    IDGenerator
-	Clock  auth.Clock
-	Config Config
+	Store       Store
+	Tokens      TokenIssuer
+	Revocations AccessTokenRevocationCache
+	Random      io.Reader
+	IDs         IDGenerator
+	Clock       auth.Clock
+	Config      Config
 }
 
 // NewService builds a session issuer.
@@ -202,12 +264,13 @@ func NewService(deps ServiceDeps) *Service {
 		ids = UUIDGenerator{}
 	}
 	return &Service{
-		store:  deps.Store,
-		tokens: deps.Tokens,
-		random: randomReader,
-		ids:    ids,
-		clock:  deps.Clock,
-		cfg:    deps.Config,
+		store:       deps.Store,
+		tokens:      deps.Tokens,
+		revocations: deps.Revocations,
+		random:      randomReader,
+		ids:         ids,
+		clock:       deps.Clock,
+		cfg:         deps.Config,
 	}
 }
 
@@ -399,11 +462,16 @@ func (s *Service) RefreshSession(ctx context.Context, req RefreshSessionRequest)
 	if err != nil {
 		return RefreshSessionResult{}, fmt.Errorf("session: generate refresh token id: %w", err)
 	}
+	accessTokenID, err := s.randomToken()
+	if err != nil {
+		return RefreshSessionResult{}, fmt.Errorf("session: generate access token id: %w", err)
+	}
 
 	rotated, err := s.store.RotateRefreshToken(ctx, RefreshTokenRotation{
 		TokenHash:         presentedHash,
 		NewRefreshTokenID: refreshID,
 		NewTokenHash:      refreshHash,
+		NewAccessTokenID:  accessTokenID,
 		RotatedAt:         now,
 		RefreshSliding:    durationOrDefault(s.cfg.RefreshSliding, defaultRefreshSliding),
 	})
@@ -414,10 +482,6 @@ func (s *Service) RefreshSession(ctx context.Context, req RefreshSessionRequest)
 		return RefreshSessionResult{}, auth.NewServiceError(auth.ErrorKindInternal, "rotated session is incomplete", nil)
 	}
 
-	accessTokenID, err := s.randomToken()
-	if err != nil {
-		return RefreshSessionResult{}, fmt.Errorf("session: generate access token id: %w", err)
-	}
 	accessExpiresAt := now.Add(durationOrDefault(s.cfg.AccessTTL, defaultAccessTTL))
 	sessionExpiresAt := account.NormalizeTimestamp(rotated.Session.ExpiresAt)
 	if !sessionExpiresAt.IsZero() && accessExpiresAt.After(sessionExpiresAt) {
@@ -454,6 +518,79 @@ func (s *Service) RefreshSession(ctx context.Context, req RefreshSessionRequest)
 	}, nil
 }
 
+// RevokeSession revokes one session owned by account and caches its current
+// access-token ID so middleware can reject it quickly.
+func (s *Service) RevokeSession(ctx context.Context, req RevokeSessionRequest) (RevokeSessionResult, error) {
+	if err := s.revocationReady(); err != nil {
+		return RevokeSessionResult{}, err
+	}
+	if req.SessionID.IsZero() || req.AccountID.IsZero() {
+		return RevokeSessionResult{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "session and account id are required", nil)
+	}
+	now := s.now(req.Now)
+	record, err := s.store.RevokeSession(ctx, SessionRevocation{
+		SessionID: req.SessionID,
+		AccountID: req.AccountID,
+		RevokedAt: now,
+	})
+	if err != nil {
+		return RevokeSessionResult{}, err
+	}
+	if err := s.cacheRevokedAccessToken(ctx, record.TokenID); err != nil {
+		return RevokeSessionResult{}, err
+	}
+	return revocationResult(record, now), nil
+}
+
+// AdminRevokeSession revokes one session without an account ownership check.
+func (s *Service) AdminRevokeSession(ctx context.Context, req AdminRevokeSessionRequest) (RevokeSessionResult, error) {
+	if err := s.revocationReady(); err != nil {
+		return RevokeSessionResult{}, err
+	}
+	if req.SessionID.IsZero() {
+		return RevokeSessionResult{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "session id is required", nil)
+	}
+	now := s.now(req.Now)
+	record, err := s.store.RevokeSession(ctx, SessionRevocation{
+		SessionID: req.SessionID,
+		RevokedAt: now,
+	})
+	if err != nil {
+		return RevokeSessionResult{}, err
+	}
+	if err := s.cacheRevokedAccessToken(ctx, record.TokenID); err != nil {
+		return RevokeSessionResult{}, err
+	}
+	return revocationResult(record, now), nil
+}
+
+// RevokeAccountSessions revokes every active full session for an account. Use
+// this after password changes or password-reset confirmation.
+func (s *Service) RevokeAccountSessions(ctx context.Context, req RevokeAccountSessionsRequest) (RevokeAccountSessionsResult, error) {
+	if err := s.revocationReady(); err != nil {
+		return RevokeAccountSessionsResult{}, err
+	}
+	if req.AccountID.IsZero() {
+		return RevokeAccountSessionsResult{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "account id is required", nil)
+	}
+	now := s.now(req.Now)
+	records, err := s.store.RevokeAccountSessions(ctx, AccountSessionsRevocation{
+		AccountID: req.AccountID,
+		RevokedAt: now,
+	})
+	if err != nil {
+		return RevokeAccountSessionsResult{}, err
+	}
+	results := make([]RevokeSessionResult, 0, len(records))
+	for _, record := range records {
+		if err := s.cacheRevokedAccessToken(ctx, record.TokenID); err != nil {
+			return RevokeAccountSessionsResult{}, err
+		}
+		results = append(results, revocationResult(record, now))
+	}
+	return RevokeAccountSessionsResult{Sessions: results}, nil
+}
+
 func (s *Service) ready() error {
 	if s == nil {
 		return auth.NewServiceError(auth.ErrorKindInternal, "session service is nil", nil)
@@ -469,6 +606,27 @@ func (s *Service) ready() error {
 	}
 	if s.ids == nil {
 		return auth.NewServiceError(auth.ErrorKindInternal, "session id generator is nil", nil)
+	}
+	return nil
+}
+
+func (s *Service) revocationReady() error {
+	if s == nil {
+		return auth.NewServiceError(auth.ErrorKindInternal, "session service is nil", nil)
+	}
+	if s.store == nil {
+		return auth.NewServiceError(auth.ErrorKindInternal, "session store is nil", nil)
+	}
+	return nil
+}
+
+func (s *Service) cacheRevokedAccessToken(ctx context.Context, tokenID string) error {
+	if s.revocations == nil || strings.TrimSpace(tokenID) == "" {
+		return nil
+	}
+	ttl := durationOrDefault(s.cfg.RevocationTTL, durationOrDefault(s.cfg.AccessTTL, defaultAccessTTL))
+	if err := s.revocations.RevokeAccessToken(ctx, tokenID, ttl); err != nil {
+		return fmt.Errorf("session: cache access token revocation: %w", err)
 	}
 	return nil
 }
@@ -684,6 +842,14 @@ func durationOrDefault(value, fallback time.Duration) time.Duration {
 		return value
 	}
 	return fallback
+}
+
+func revocationResult(record SessionRecord, revokedAt time.Time) RevokeSessionResult {
+	return RevokeSessionResult{
+		SessionID: record.ID,
+		AccountID: record.AccountID,
+		RevokedAt: account.NormalizeTimestamp(revokedAt),
+	}
 }
 
 // UUIDGenerator creates UUIDv7 session and refresh-token IDs.

@@ -71,6 +71,7 @@ func TestSQLStoreRefreshRotationIntegration(t *testing.T) {
 		TokenHash:         oldHash[:],
 		NewRefreshTokenID: newRefreshID,
 		NewTokenHash:      newHash[:],
+		NewAccessTokenID:  "rotated-access-jti",
 		RotatedAt:         now.Add(time.Minute),
 		RefreshSliding:    time.Hour,
 	})
@@ -82,6 +83,9 @@ func TestSQLStoreRefreshRotationIntegration(t *testing.T) {
 	}
 	if rotated.RefreshToken.ParentID != oldRefreshID || rotated.RefreshToken.ExpiresAt != now.Add(time.Minute).Add(time.Hour) {
 		t.Fatalf("rotated token = %#v", rotated.RefreshToken)
+	}
+	if rotated.Session.TokenID != "rotated-access-jti" {
+		t.Fatalf("rotated session token id = %q, want rotated-access-jti", rotated.Session.TokenID)
 	}
 
 	oldRow, err := queries.GetRefreshTokenByHash(ctx, oldHash[:])
@@ -103,6 +107,7 @@ func TestSQLStoreRefreshRotationIntegration(t *testing.T) {
 		TokenHash:         oldHash[:],
 		NewRefreshTokenID: reuseRefreshID,
 		NewTokenHash:      reuseHash[:],
+		NewAccessTokenID:  "reuse-access-jti",
 		RotatedAt:         now.Add(2 * time.Minute),
 		RefreshSliding:    time.Hour,
 	})
@@ -127,5 +132,104 @@ func TestSQLStoreRefreshRotationIntegration(t *testing.T) {
 	}
 	if !oldRow.RevokedAt.Valid || !newRow.RevokedAt.Valid {
 		t.Fatalf("refresh family was not revoked: old=%#v new=%#v", oldRow, newRow)
+	}
+}
+
+func TestSQLStoreSessionRevocationIntegration(t *testing.T) {
+	db := testutil.NewPostgresDB(t)
+	ctx := context.Background()
+	queries := db.Queries
+	store := NewSQLStore(db.Pool, queries)
+	now := time.Date(2026, 5, 2, 20, 0, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000971")
+	firstSessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000972")
+	secondSessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000973")
+	firstRefreshID := uuid.MustParse("018f1f74-10a1-7000-9000-000000000974")
+	secondRefreshID := uuid.MustParse("018f1f74-10a1-7000-9000-000000000975")
+	firstHash := sha256.Sum256(bytes.Repeat([]byte{0x81}, randomTokenBytes))
+	secondHash := sha256.Sum256(bytes.Repeat([]byte{0x82}, randomTokenBytes))
+
+	if _, err := queries.CreateAccount(ctx, sqlc.CreateAccountParams{
+		ID:                 accountIDToPG(accountID),
+		Username:           "revocation_user",
+		UsernameNormalized: "revocation_user",
+		DisplayName:        "Revocation User",
+		Metadata:           []byte(`{}`),
+	}); err != nil {
+		t.Fatalf("seed account: %v", err)
+	}
+	for _, seed := range []struct {
+		sessionID account.SessionID
+		refreshID uuid.UUID
+		tokenID   string
+		hash      []byte
+	}{
+		{sessionID: firstSessionID, refreshID: firstRefreshID, tokenID: "first-access-jti", hash: firstHash[:]},
+		{sessionID: secondSessionID, refreshID: secondRefreshID, tokenID: "second-access-jti", hash: secondHash[:]},
+	} {
+		if err := store.CreateFullSession(ctx, FullSessionRecord{
+			Session: SessionRecord{
+				ID:        seed.sessionID,
+				AccountID: accountID,
+				Kind:      sessionKindFull,
+				Status:    sessionStatusActive,
+				TokenID:   seed.tokenID,
+				ExpiresAt: now.Add(90 * 24 * time.Hour),
+			},
+			RefreshToken: RefreshTokenRecord{
+				ID:                seed.refreshID,
+				SessionID:         seed.sessionID,
+				TokenHash:         seed.hash,
+				Scopes:            []string{"openid", "profile"},
+				ExpiresAt:         now.Add(30 * 24 * time.Hour),
+				AbsoluteExpiresAt: now.Add(90 * 24 * time.Hour),
+			},
+		}); err != nil {
+			t.Fatalf("create seeded session: %v", err)
+		}
+	}
+
+	revoked, err := store.RevokeSession(ctx, SessionRevocation{
+		SessionID: firstSessionID,
+		AccountID: accountID,
+		RevokedAt: now.Add(time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("revoke one session: %v", err)
+	}
+	if revoked.ID != firstSessionID || revoked.TokenID != "first-access-jti" {
+		t.Fatalf("revoked session = %#v", revoked)
+	}
+	firstRow, err := queries.GetSessionByID(ctx, sessionIDToPG(firstSessionID))
+	if err != nil {
+		t.Fatalf("lookup first session: %v", err)
+	}
+	if firstRow.Status != sessionStatusRevoked || !firstRow.RevokedAt.Valid {
+		t.Fatalf("first session not revoked: %#v", firstRow)
+	}
+	firstRefresh, err := queries.GetRefreshTokenByHash(ctx, firstHash[:])
+	if err != nil {
+		t.Fatalf("lookup first refresh: %v", err)
+	}
+	if !firstRefresh.RevokedAt.Valid {
+		t.Fatalf("first refresh token not revoked: %#v", firstRefresh)
+	}
+
+	revokedRows, err := store.RevokeAccountSessions(ctx, AccountSessionsRevocation{
+		AccountID: accountID,
+		RevokedAt: now.Add(2 * time.Minute),
+	})
+	if err != nil {
+		t.Fatalf("revoke account sessions: %v", err)
+	}
+	if len(revokedRows) != 1 || revokedRows[0].ID != secondSessionID {
+		t.Fatalf("account revoked sessions = %#v", revokedRows)
+	}
+	secondRefresh, err := queries.GetRefreshTokenByHash(ctx, secondHash[:])
+	if err != nil {
+		t.Fatalf("lookup second refresh: %v", err)
+	}
+	if !secondRefresh.RevokedAt.Valid {
+		t.Fatalf("second refresh token not revoked: %#v", secondRefresh)
 	}
 }
