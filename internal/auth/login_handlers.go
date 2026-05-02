@@ -106,10 +106,11 @@ func (m *Module) writeLoginSuccess(c *gin.Context, req LoginRequest, result Auth
 
 	if result.Session.Partial {
 		issued, err := m.sessions.IssuePartialSession(c.Request.Context(), PartialSessionIssueRequest{
-			AccountID:       result.AccountID,
-			VerifiedFactors: result.VerifiedFactors,
-			TTL:             time.Until(result.Session.ExpiresAt),
-			Now:             time.Now(),
+			AccountID:         result.AccountID,
+			VerifiedFactors:   result.VerifiedFactors,
+			ChallengeBindings: verifiedFactorChallengeBindings(result.VerifiedFactors, result.FactorChecks),
+			TTL:               time.Until(result.Session.ExpiresAt),
+			Now:               time.Now(),
 		})
 		if err != nil {
 			writeLoginError(c, err)
@@ -148,6 +149,30 @@ func (m *Module) writeLoginSuccess(c *gin.Context, req LoginRequest, result Auth
 			ExpiresAt:    account.NormalizeTimestamp(issued.ExpiresAt),
 		},
 	})
+}
+
+func verifiedFactorChallengeBindings(factors []account.FactorKind, checks []FactorCheck) []string {
+	seen := make(map[account.FactorKind]struct{}, len(factors))
+	bindings := make([]string, 0, len(factors))
+	for _, factor := range factors {
+		if !factor.Valid() {
+			continue
+		}
+		if _, exists := seen[factor]; exists {
+			continue
+		}
+		seen[factor] = struct{}{}
+
+		binding := ""
+		for _, check := range checks {
+			if check.Kind == factor && check.Verified() {
+				binding = check.ChallengeBinding
+				break
+			}
+		}
+		bindings = append(bindings, binding)
+	}
+	return bindings
 }
 
 func writeLoginError(c *gin.Context, err error) {

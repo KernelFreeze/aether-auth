@@ -330,10 +330,10 @@ Exit criteria:
   - [x] Persist IP, user agent, expiry, and auth factors.
   - [x] Issue PASETO v4.public access tokens.
   - [x] Issue opaque refresh tokens stored as hashes.
-- [ ] Implement partial sessions:
-  - [ ] v4.local token with two-minute TTL.
-  - [ ] Claims limited to MFA verification.
-  - [ ] Factor state bound to account and challenge context.
+- [x] Implement partial sessions:
+  - [x] v4.local token with two-minute TTL.
+  - [x] Claims limited to MFA verification.
+  - [x] Factor state bound to account and challenge context.
 - [ ] Implement refresh rotation:
   - [ ] Rotate refresh token on every use.
   - [ ] Detect reused refresh tokens.

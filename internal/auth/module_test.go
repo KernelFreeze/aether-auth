@@ -178,6 +178,58 @@ func TestAuthModuleLoginWithPasswordIssuesFullSession(t *testing.T) {
 	}
 }
 
+func TestAuthModuleLoginWithPasswordIssuesPartialSession(t *testing.T) {
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000711")
+	sessionID := parseSessionID(t, "018f1f74-10a1-7000-9000-000000000712")
+	expiresAt := time.Now().Add(2 * time.Minute)
+	login := &loginManager{
+		result: AuthResult{
+			AccountID:       accountID,
+			CredentialID:    mustCredentialID(t, "018f1f74-10a1-7000-9000-000000000713"),
+			VerifiedFactors: []account.FactorKind{account.FactorKindUser, account.FactorKindPassword},
+			FactorChecks: []FactorCheck{
+				{Kind: account.FactorKindUser, VerifiedAt: time.Now(), ChallengeBinding: "user-check"},
+				{Kind: account.FactorKindPassword, VerifiedAt: time.Now(), ChallengeBinding: "password-check"},
+			},
+			MFAStatus: MFAStatusRequired,
+			Session: SessionIssueInstructions{
+				Issue:     true,
+				Partial:   true,
+				ExpiresAt: expiresAt,
+			},
+		},
+	}
+	sessions := &sessionIssuer{
+		partial: PartialSessionIssueResult{
+			SessionID: sessionID,
+			Token:     "partial-token",
+			ExpiresAt: expiresAt,
+		},
+	}
+	router := authTestRouter(t, New(Deps{Login: login, Sessions: sessions}))
+
+	rec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodPost, "/auth/login", map[string]any{
+		"kind":     "password",
+		"username": "celeste",
+		"password": "correct horse battery staple",
+	}))
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	var body loginResponse
+	testutil.DecodeJSON(t, rec.Body, &body)
+	if body.Status != "mfa_required" || body.PartialSession == nil || body.PartialSession.Token != "partial-token" || body.Session != nil {
+		t.Fatalf("login response = %#v", body)
+	}
+	if sessions.partialReq.AccountID != accountID || sessions.partialReq.TTL <= 0 {
+		t.Fatalf("partial session request = %#v", sessions.partialReq)
+	}
+	if got, want := sessions.partialReq.ChallengeBindings, []string{"user-check", "password-check"}; len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("challenge bindings = %#v, want %#v", got, want)
+	}
+}
+
 func TestAuthModuleLoginUsesGenericPublicErrors(t *testing.T) {
 	for _, err := range []error{
 		ErrInvalidCredentials,
