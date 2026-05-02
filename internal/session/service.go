@@ -31,6 +31,7 @@ const (
 	sessionKindFull        = "full"
 	sessionKindPartial     = "partial"
 	sessionStatusActive    = "active"
+	sessionStatusRevoked   = "revoked"
 )
 
 // Config holds session and token defaults.
@@ -64,6 +65,7 @@ func ConfigFrom(cfg *config.Config) Config {
 type Store interface {
 	CreateFullSession(context.Context, FullSessionRecord) error
 	CreatePartialSession(context.Context, PartialSessionRecord) error
+	RotateRefreshToken(context.Context, RefreshTokenRotation) (RefreshTokenRotationResult, error)
 }
 
 // TokenIssuer creates PASETO tokens for session results.
@@ -127,11 +129,44 @@ type FactorRecord struct {
 type RefreshTokenRecord struct {
 	ID                uuid.UUID
 	SessionID         account.SessionID
+	ParentID          uuid.UUID
 	ClientID          account.ClientID
 	TokenHash         []byte
 	Scopes            []string
 	ExpiresAt         time.Time
 	AbsoluteExpiresAt time.Time
+}
+
+// RefreshTokenRotation contains the token hashes and policy inputs needed to
+// rotate a refresh token atomically.
+type RefreshTokenRotation struct {
+	TokenHash         []byte
+	NewRefreshTokenID uuid.UUID
+	NewTokenHash      []byte
+	RotatedAt         time.Time
+	RefreshSliding    time.Duration
+}
+
+// RefreshTokenRotationResult is the session state needed to issue replacement
+// client tokens after a refresh token is rotated.
+type RefreshTokenRotationResult struct {
+	Session      SessionRecord
+	Factors      []FactorRecord
+	RefreshToken RefreshTokenRecord
+}
+
+// RefreshSessionRequest contains the opaque refresh token presented by a client.
+type RefreshSessionRequest struct {
+	RefreshToken string
+	Now          time.Time
+}
+
+// RefreshSessionResult contains replacement session material after rotation.
+type RefreshSessionResult struct {
+	SessionID    account.SessionID
+	AccessToken  string
+	RefreshToken string
+	ExpiresAt    time.Time
 }
 
 // Service creates login sessions and token material.
@@ -344,6 +379,81 @@ func (s *Service) IssuePartialSession(ctx context.Context, req auth.PartialSessi
 	}, nil
 }
 
+// RefreshSession rotates an opaque refresh token and issues replacement client
+// tokens for the same persisted session.
+func (s *Service) RefreshSession(ctx context.Context, req RefreshSessionRequest) (RefreshSessionResult, error) {
+	if err := s.ready(); err != nil {
+		return RefreshSessionResult{}, err
+	}
+	now := s.now(req.Now)
+	presentedHash, err := hashRefreshToken(req.RefreshToken)
+	if err != nil {
+		return RefreshSessionResult{}, err
+	}
+
+	refreshToken, refreshHash, err := s.randomTokenWithHash()
+	if err != nil {
+		return RefreshSessionResult{}, fmt.Errorf("session: generate refresh token: %w", err)
+	}
+	refreshID, err := s.ids.NewRefreshTokenID()
+	if err != nil {
+		return RefreshSessionResult{}, fmt.Errorf("session: generate refresh token id: %w", err)
+	}
+
+	rotated, err := s.store.RotateRefreshToken(ctx, RefreshTokenRotation{
+		TokenHash:         presentedHash,
+		NewRefreshTokenID: refreshID,
+		NewTokenHash:      refreshHash,
+		RotatedAt:         now,
+		RefreshSliding:    durationOrDefault(s.cfg.RefreshSliding, defaultRefreshSliding),
+	})
+	if err != nil {
+		return RefreshSessionResult{}, err
+	}
+	if rotated.Session.ID.IsZero() || rotated.Session.AccountID.IsZero() {
+		return RefreshSessionResult{}, auth.NewServiceError(auth.ErrorKindInternal, "rotated session is incomplete", nil)
+	}
+
+	accessTokenID, err := s.randomToken()
+	if err != nil {
+		return RefreshSessionResult{}, fmt.Errorf("session: generate access token id: %w", err)
+	}
+	accessExpiresAt := now.Add(durationOrDefault(s.cfg.AccessTTL, defaultAccessTTL))
+	sessionExpiresAt := account.NormalizeTimestamp(rotated.Session.ExpiresAt)
+	if !sessionExpiresAt.IsZero() && accessExpiresAt.After(sessionExpiresAt) {
+		accessExpiresAt = sessionExpiresAt
+	}
+
+	scopes := stringsOrDefault(rotated.RefreshToken.Scopes, s.cfg.DefaultScopes, []string{"openid", "profile"})
+	audience := stringsOrDefault(nil, s.cfg.DefaultAudience, nil)
+	factors := factorKindsFromRecords(rotated.Factors)
+	accessToken, err := s.tokens.IssueAccessToken(ctx, paseto.IssueRequest{
+		Claims: accessClaims(accessClaimInput{
+			Issuer:    s.cfg.Issuer,
+			AccountID: rotated.Session.AccountID,
+			SessionID: rotated.Session.ID,
+			ClientID:  rotated.Session.ClientID,
+			TokenID:   accessTokenID,
+			Scopes:    scopes,
+			Audience:  audience,
+			Factors:   factors,
+			IssuedAt:  now,
+			ExpiresAt: accessExpiresAt,
+		}),
+		Implicit: implicitAssertion("access", rotated.Session.AccountID, rotated.Session.ID, rotated.Session.ClientID),
+	})
+	if err != nil {
+		return RefreshSessionResult{}, fmt.Errorf("session: issue access token: %w", err)
+	}
+
+	return RefreshSessionResult{
+		SessionID:    rotated.Session.ID,
+		AccessToken:  accessToken,
+		RefreshToken: refreshToken,
+		ExpiresAt:    accessExpiresAt,
+	}, nil
+}
+
 func (s *Service) ready() error {
 	if s == nil {
 		return auth.NewServiceError(auth.ErrorKindInternal, "session service is nil", nil)
@@ -388,6 +498,19 @@ func (s *Service) randomTokenWithHash() (string, []byte, error) {
 	}
 	sum := sha256.Sum256(raw)
 	return base64.RawURLEncoding.EncodeToString(raw), sum[:], nil
+}
+
+func hashRefreshToken(token string) ([]byte, error) {
+	token = strings.TrimSpace(token)
+	if token == "" {
+		return nil, auth.NewServiceError(auth.ErrorKindInvalidCredentials, "refresh token is required", nil)
+	}
+	raw, err := base64.RawURLEncoding.DecodeString(token)
+	if err != nil || len(raw) != randomTokenBytes {
+		return nil, auth.NewServiceError(auth.ErrorKindInvalidCredentials, "refresh token is invalid", err)
+	}
+	sum := sha256.Sum256(raw)
+	return sum[:], nil
 }
 
 func normalizeIP(value string) string {
@@ -509,6 +632,16 @@ func factorStrings(factors []account.FactorKind) []string {
 		values = append(values, factor.String())
 	}
 	return values
+}
+
+func factorKindsFromRecords(records []FactorRecord) []account.FactorKind {
+	factors := make([]account.FactorKind, 0, len(records))
+	for _, record := range records {
+		if record.Kind.Valid() {
+			factors = append(factors, record.Kind)
+		}
+	}
+	return normalizeFactors(factors)
 }
 
 func implicitAssertion(kind string, accountID account.AccountID, sessionID account.SessionID, clientID account.ClientID) []byte {

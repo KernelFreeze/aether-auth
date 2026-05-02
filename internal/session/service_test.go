@@ -113,6 +113,116 @@ func TestServiceIssueSessionCreatesFullSessionAndTokens(t *testing.T) {
 	}
 }
 
+func TestServiceRefreshSessionRotatesTokenAndIssuesReplacementTokens(t *testing.T) {
+	now := time.Date(2026, 5, 2, 17, 0, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000841")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000842")
+	refreshID := uuid.MustParse("018f1f74-10a1-7000-9000-000000000843")
+	presentedRaw := bytes.Repeat([]byte{0x55}, randomTokenBytes)
+	newRefreshRaw := bytes.Repeat([]byte{0x66}, randomTokenBytes)
+	accessRandom := bytes.Repeat([]byte{0x77}, randomTokenBytes)
+	presentedToken := base64.RawURLEncoding.EncodeToString(presentedRaw)
+	presentedHash := sha256.Sum256(presentedRaw)
+	newRefreshHash := sha256.Sum256(newRefreshRaw)
+	store := &fakeStore{
+		rotationResult: RefreshTokenRotationResult{
+			Session: SessionRecord{
+				ID:        sessionID,
+				AccountID: accountID,
+				Kind:      sessionKindFull,
+				Status:    sessionStatusActive,
+				ExpiresAt: now.Add(90 * 24 * time.Hour),
+			},
+			Factors: []FactorRecord{
+				{SessionID: sessionID, Kind: account.FactorKindUser, VerifiedAt: now.Add(-time.Minute)},
+				{SessionID: sessionID, Kind: account.FactorKindPassword, VerifiedAt: now.Add(-time.Minute)},
+			},
+			RefreshToken: RefreshTokenRecord{
+				SessionID:         sessionID,
+				Scopes:            []string{"openid", "profile", "email"},
+				ExpiresAt:         now.Add(30 * 24 * time.Hour),
+				AbsoluteExpiresAt: now.Add(90 * 24 * time.Hour),
+			},
+		},
+	}
+	tokens := &fakeTokenIssuer{accessToken: "refreshed-access-token"}
+	service := NewService(ServiceDeps{
+		Store:  store,
+		Tokens: tokens,
+		Random: bytes.NewReader(append(newRefreshRaw, accessRandom...)),
+		IDs: fixedIDs{
+			refreshIDs: []uuid.UUID{refreshID},
+		},
+		Config: Config{
+			Issuer:          "https://auth.example.test",
+			DefaultAudience: []string{"https://api.example.test"},
+			AccessTTL:       15 * time.Minute,
+			RefreshSliding:  30 * 24 * time.Hour,
+		},
+	})
+
+	result, err := service.RefreshSession(context.Background(), RefreshSessionRequest{
+		RefreshToken: presentedToken,
+		Now:          now,
+	})
+	if err != nil {
+		t.Fatalf("refresh session: %v", err)
+	}
+
+	if result.SessionID != sessionID || result.AccessToken != "refreshed-access-token" || result.ExpiresAt != now.Add(15*time.Minute) {
+		t.Fatalf("refresh result = %#v", result)
+	}
+	if !bytes.Equal(store.rotation.TokenHash, presentedHash[:]) {
+		t.Fatalf("presented hash = %x, want %x", store.rotation.TokenHash, presentedHash)
+	}
+	if store.rotation.NewRefreshTokenID != refreshID || !bytes.Equal(store.rotation.NewTokenHash, newRefreshHash[:]) {
+		t.Fatalf("rotation = %#v", store.rotation)
+	}
+	decodedRefresh, err := base64.RawURLEncoding.DecodeString(result.RefreshToken)
+	if err != nil {
+		t.Fatalf("decode refreshed token: %v", err)
+	}
+	if !bytes.Equal(decodedRefresh, newRefreshRaw) {
+		t.Fatalf("refreshed token bytes = %x, want %x", decodedRefresh, newRefreshRaw)
+	}
+	claims := tokens.access.Claims
+	if claims["sub"] != accountID.String() || claims["sid"] != sessionID.String() || claims["scope"] != "openid profile email" {
+		t.Fatalf("access claims = %#v", claims)
+	}
+	if !reflect.DeepEqual(claims["factors"], []string{"user", "password"}) {
+		t.Fatalf("factors claim = %#v", claims["factors"])
+	}
+	if tokens.access.Implicit == nil || bytes.Contains(tokens.access.Implicit, []byte(result.RefreshToken)) {
+		t.Fatalf("implicit assertion = %q", string(tokens.access.Implicit))
+	}
+}
+
+func TestServiceRefreshSessionRejectsReusedToken(t *testing.T) {
+	presentedRaw := bytes.Repeat([]byte{0x88}, randomTokenBytes)
+	store := &fakeStore{
+		rotationErr: auth.NewServiceError(auth.ErrorKindInvalidCredentials, "refresh token has already been used", nil),
+	}
+	tokens := &fakeTokenIssuer{accessToken: "should-not-be-issued"}
+	service := NewService(ServiceDeps{
+		Store:  store,
+		Tokens: tokens,
+		Random: bytes.NewReader(bytes.Repeat([]byte{0x99}, randomTokenBytes)),
+		IDs: fixedIDs{
+			refreshIDs: []uuid.UUID{uuid.MustParse("018f1f74-10a1-7000-9000-000000000853")},
+		},
+	})
+
+	_, err := service.RefreshSession(context.Background(), RefreshSessionRequest{
+		RefreshToken: base64.RawURLEncoding.EncodeToString(presentedRaw),
+	})
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("refresh error = %v, want invalid credentials", err)
+	}
+	if tokens.access.Claims != nil {
+		t.Fatalf("access token should not be issued after reuse: %#v", tokens.access)
+	}
+}
+
 func TestServiceIssuePartialSessionCreatesBoundToken(t *testing.T) {
 	now := time.Date(2026, 5, 2, 15, 0, 0, 0, time.UTC)
 	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000811")
@@ -228,10 +338,14 @@ func TestServiceIssueSessionValidatesRequiredDependencies(t *testing.T) {
 }
 
 type fakeStore struct {
-	fullCalled    bool
-	partialCalled bool
-	full          FullSessionRecord
-	partial       PartialSessionRecord
+	fullCalled     bool
+	partialCalled  bool
+	rotationCalled bool
+	full           FullSessionRecord
+	partial        PartialSessionRecord
+	rotation       RefreshTokenRotation
+	rotationResult RefreshTokenRotationResult
+	rotationErr    error
 }
 
 func (s *fakeStore) CreateFullSession(_ context.Context, record FullSessionRecord) error {
@@ -244,6 +358,18 @@ func (s *fakeStore) CreatePartialSession(_ context.Context, record PartialSessio
 	s.partialCalled = true
 	s.partial = record
 	return nil
+}
+
+func (s *fakeStore) RotateRefreshToken(_ context.Context, rotation RefreshTokenRotation) (RefreshTokenRotationResult, error) {
+	s.rotationCalled = true
+	s.rotation = rotation
+	if s.rotationErr != nil {
+		return RefreshTokenRotationResult{}, s.rotationErr
+	}
+	result := s.rotationResult
+	result.RefreshToken.ID = rotation.NewRefreshTokenID
+	result.RefreshToken.TokenHash = append([]byte(nil), rotation.NewTokenHash...)
+	return result, nil
 }
 
 type fakeTokenIssuer struct {

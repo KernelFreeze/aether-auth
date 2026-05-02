@@ -146,6 +146,9 @@ func run() error {
 					PublicBaseURL: cfg.Issuer.BaseURL,
 				}),
 			}),
+			Session: session.New(session.Deps{
+				Refresher: sessionIssuer,
+			}),
 		},
 		Middlewares: httpapi.Middlewares{
 			RateLimit: ratelimit.NewMiddleware(rateLimiter),

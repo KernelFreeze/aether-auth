@@ -334,10 +334,10 @@ Exit criteria:
   - [x] v4.local token with two-minute TTL.
   - [x] Claims limited to MFA verification.
   - [x] Factor state bound to account and challenge context.
-- [ ] Implement refresh rotation:
-  - [ ] Rotate refresh token on every use.
-  - [ ] Detect reused refresh tokens.
-  - [ ] Revoke the whole rotation chain on reuse.
+- [x] Implement refresh rotation:
+  - [x] Rotate refresh token on every use.
+  - [x] Detect reused refresh tokens.
+  - [x] Revoke the whole rotation chain on reuse.
 - [ ] Implement session revocation:
   - [ ] User-initiated session deletion.
   - [ ] Password-change revocation.
@@ -348,14 +348,14 @@ Exit criteria:
   - [ ] `DELETE /account/sessions/{id}`.
 - [ ] Add tests:
   - [x] Access token claims and footers.
-  - [ ] Refresh rotation and reuse detection.
+  - [x] Refresh rotation and reuse detection.
   - [ ] Revocation cache TTL.
   - [ ] Partial token cannot authorize normal APIs.
 
 Exit criteria:
 
-- [ ] Password login can produce usable access and refresh tokens.
-- [ ] Refresh token reuse terminates the session family.
+- [x] Password login can produce usable access and refresh tokens.
+- [x] Refresh token reuse terminates the session family.
 - [ ] Revoked access-token IDs are rejected by middleware.
 
 ## Stage 7: MFA factor model, TOTP, and recovery codes

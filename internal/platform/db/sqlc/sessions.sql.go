@@ -399,10 +399,20 @@ func (q *Queries) RevokeRefreshToken(ctx context.Context, arg RevokeRefreshToken
 }
 
 const revokeRefreshTokenChain = `-- name: RevokeRefreshTokenChain :many
-WITH RECURSIVE token_chain AS (
-    SELECT refresh_tokens.id
+WITH RECURSIVE token_ancestors AS (
+    SELECT refresh_tokens.id, refresh_tokens.parent_id
     FROM refresh_tokens
     WHERE refresh_tokens.id = $2
+
+    UNION ALL
+
+    SELECT rt.id, rt.parent_id
+    FROM refresh_tokens AS rt
+    JOIN token_ancestors AS ta ON ta.parent_id = rt.id
+),
+token_chain AS (
+    SELECT id
+    FROM token_ancestors
 
     UNION ALL
 

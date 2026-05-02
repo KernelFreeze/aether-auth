@@ -285,6 +285,7 @@ POST   /auth/login
 POST   /auth/mfa/verify
 POST   /auth/reset-password/request
 POST   /auth/reset-password/confirm
+POST   /session/refresh
 
 GET    /auth/webauthn/challenge
 POST   /auth/webauthn/register
@@ -308,4 +309,3 @@ PATCH  /orgs/{slug}/members/{account_id}
 
 GET    /.well-known/paseto-keys
 ```
-
