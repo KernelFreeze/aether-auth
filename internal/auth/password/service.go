@@ -164,6 +164,7 @@ func (s *Service) Verify(ctx context.Context, req auth.VerifyRequest) (auth.Auth
 		return auth.AuthResult{}, s.recordFailure(ctx, req, credential, now)
 	}
 
+	factorChecks := successfulPasswordFactorChecks(now)
 	if err := s.recordSuccess(ctx, req, credential, now); err != nil {
 		return auth.AuthResult{}, err
 	}
@@ -181,7 +182,8 @@ func (s *Service) Verify(ctx context.Context, req auth.VerifyRequest) (auth.Auth
 	return auth.AuthResult{
 		AccountID:          req.AccountHint,
 		CredentialID:       credential.ID,
-		VerifiedFactors:    []account.FactorKind{account.FactorKindUser, account.FactorKindPassword},
+		VerifiedFactors:    auth.VerifiedFactorKinds(factorChecks),
+		FactorChecks:       factorChecks,
 		MFAStatus:          mfaStatus,
 		Session:            session,
 		CredentialVerified: true,
@@ -295,6 +297,10 @@ func (s *Service) recordFailure(ctx context.Context, req auth.VerifyRequest, cre
 		Username:     req.Username,
 		IP:           req.IP,
 		OccurredAt:   now,
+		FactorCheck: auth.FactorCheck{
+			Kind:     account.FactorKindPassword,
+			FailedAt: now,
+		},
 	})
 	if err != nil {
 		return err
@@ -315,7 +321,15 @@ func (s *Service) recordSuccess(ctx context.Context, req auth.VerifyRequest, cre
 		Username:     req.Username,
 		IP:           req.IP,
 		OccurredAt:   now,
+		FactorChecks: successfulPasswordFactorChecks(now),
 	})
+}
+
+func successfulPasswordFactorChecks(now time.Time) []auth.FactorCheck {
+	return []auth.FactorCheck{
+		{Kind: account.FactorKindUser, VerifiedAt: now},
+		{Kind: account.FactorKindPassword, VerifiedAt: now},
+	}
 }
 
 func (s *Service) sealHash(ctx context.Context, accountID account.AccountID, hash auth.PasswordHash) ([]byte, error) {

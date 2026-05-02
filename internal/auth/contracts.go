@@ -87,6 +87,37 @@ func (s PartialSession) Clone() PartialSession {
 	return s
 }
 
+// FactorCheck records one factor verification attempt. Successful checks can
+// be persisted to session factor state; failed checks stay internal and are
+// useful for lockout, MFA, and audit decisions.
+type FactorCheck struct {
+	Kind             account.FactorKind
+	VerifiedAt       time.Time
+	FailedAt         time.Time
+	ChallengeBinding string
+}
+
+// Verified reports whether this factor check succeeded.
+func (c FactorCheck) Verified() bool {
+	return c.Kind.Valid() && !account.NormalizeTimestamp(c.VerifiedAt).IsZero() && account.NormalizeTimestamp(c.FailedAt).IsZero()
+}
+
+// Failed reports whether this factor check failed.
+func (c FactorCheck) Failed() bool {
+	return c.Kind.Valid() && !account.NormalizeTimestamp(c.FailedAt).IsZero() && account.NormalizeTimestamp(c.VerifiedAt).IsZero()
+}
+
+// VerifiedFactorKinds returns the successfully verified factor kinds in order.
+func VerifiedFactorKinds(checks []FactorCheck) []account.FactorKind {
+	factors := make([]account.FactorKind, 0, len(checks))
+	for _, check := range checks {
+		if check.Verified() {
+			factors = append(factors, check.Kind)
+		}
+	}
+	return factors
+}
+
 // MFAStatus describes whether the caller should continue into MFA or issue a
 // full session after verification.
 type MFAStatus string
@@ -159,6 +190,7 @@ type AuthResult struct {
 	AccountID          account.AccountID
 	CredentialID       account.CredentialID
 	VerifiedFactors    []account.FactorKind
+	FactorChecks       []FactorCheck
 	MFAStatus          MFAStatus
 	ExternalIdentity   *ExternalIdentity
 	Audit              AuditMetadata
@@ -173,6 +205,7 @@ type AuthResult struct {
 // the original.
 func (r AuthResult) Clone() AuthResult {
 	r.VerifiedFactors = cloneFactorKinds(r.VerifiedFactors)
+	r.FactorChecks = cloneFactorChecks(r.FactorChecks)
 	if r.ExternalIdentity != nil {
 		external := r.ExternalIdentity.Clone()
 		r.ExternalIdentity = &external
@@ -204,4 +237,8 @@ func cloneStrings(values []string) []string {
 
 func cloneFactorKinds(values []account.FactorKind) []account.FactorKind {
 	return append([]account.FactorKind(nil), values...)
+}
+
+func cloneFactorChecks(values []FactorCheck) []FactorCheck {
+	return append([]FactorCheck(nil), values...)
 }

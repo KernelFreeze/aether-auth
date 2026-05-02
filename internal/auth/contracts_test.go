@@ -126,6 +126,7 @@ func TestAuthContractCloneDetachesMutableFields(t *testing.T) {
 		AccountID:        accountID,
 		CredentialID:     credentialID,
 		VerifiedFactors:  []account.FactorKind{account.FactorKindUser},
+		FactorChecks:     []FactorCheck{{Kind: account.FactorKindUser, VerifiedAt: time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)}},
 		ExternalIdentity: external,
 		Audit: AuditMetadata{
 			Attributes: map[string]string{"risk": "low"},
@@ -139,6 +140,7 @@ func TestAuthContractCloneDetachesMutableFields(t *testing.T) {
 
 	cloned := result.Clone()
 	result.VerifiedFactors[0] = account.FactorKindPassword
+	result.FactorChecks[0].Kind = account.FactorKindPassword
 	result.ExternalIdentity.Metadata["hd"] = "mutated.example"
 	result.Audit.Attributes["risk"] = "high"
 	result.Session.Scopes[0] = "mutated"
@@ -147,6 +149,9 @@ func TestAuthContractCloneDetachesMutableFields(t *testing.T) {
 
 	if cloned.VerifiedFactors[0] != account.FactorKindUser {
 		t.Fatalf("cloned factor = %q, want %q", cloned.VerifiedFactors[0], account.FactorKindUser)
+	}
+	if cloned.FactorChecks[0].Kind != account.FactorKindUser {
+		t.Fatalf("cloned factor check = %q, want %q", cloned.FactorChecks[0].Kind, account.FactorKindUser)
 	}
 	if cloned.ExternalIdentity.Metadata["hd"] != "example.com" {
 		t.Fatalf("cloned external metadata = %q, want example.com", cloned.ExternalIdentity.Metadata["hd"])
@@ -162,6 +167,27 @@ func TestAuthContractCloneDetachesMutableFields(t *testing.T) {
 	}
 	if cloned.PublicMetadata["next"] != "mfa" {
 		t.Fatalf("cloned metadata next = %q, want mfa", cloned.PublicMetadata["next"])
+	}
+}
+
+func TestFactorChecksModelVerifiedAndFailedUpdates(t *testing.T) {
+	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
+	checks := []FactorCheck{
+		{Kind: account.FactorKindUser, VerifiedAt: now},
+		{Kind: account.FactorKindPassword, VerifiedAt: now},
+		{Kind: account.FactorKindTOTP, FailedAt: now.Add(time.Second)},
+	}
+
+	if !checks[0].Verified() || checks[0].Failed() {
+		t.Fatalf("user factor check = %#v, want verified only", checks[0])
+	}
+	if !checks[2].Failed() || checks[2].Verified() {
+		t.Fatalf("totp factor check = %#v, want failed only", checks[2])
+	}
+
+	factors := VerifiedFactorKinds(checks)
+	if len(factors) != 2 || factors[0] != account.FactorKindUser || factors[1] != account.FactorKindPassword {
+		t.Fatalf("verified factors = %#v", factors)
 	}
 }
 

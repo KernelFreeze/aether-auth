@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/KernelFreeze/aether-auth/internal/account"
+	"github.com/KernelFreeze/aether-auth/internal/auth"
 )
 
 const defaultLoginEndpoint = "/auth/login"
@@ -18,6 +19,7 @@ type AttemptFailure struct {
 	IP           netip.Addr
 	OccurredAt   time.Time
 	Endpoint     string
+	FactorCheck  auth.FactorCheck
 }
 
 // AttemptSuccess describes a successful password verification.
@@ -28,6 +30,7 @@ type AttemptSuccess struct {
 	IP           netip.Addr
 	OccurredAt   time.Time
 	Endpoint     string
+	FactorChecks []auth.FactorCheck
 }
 
 // AttemptResult reports the updated lockout state after a failure.

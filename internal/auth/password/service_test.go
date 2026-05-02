@@ -84,6 +84,7 @@ func TestVerifyPasswordUpdatesLastUsedAndRehashes(t *testing.T) {
 	credentialID := mustCredentialID(t, "018f1f74-10a1-7000-9000-000000001005")
 	now := time.Date(2026, 5, 1, 12, 0, 0, 0, time.UTC)
 	repo := &fakeCredentialRepository{}
+	attempts := &fakeAttemptStore{}
 	hasher := &fakePasswordHasher{
 		verify: auth.PasswordVerifyResult{Matched: true, NeedsRehash: true},
 		hash:   auth.PasswordHash{PHCString: "phc-new", ParamsID: "new"},
@@ -93,7 +94,7 @@ func TestVerifyPasswordUpdatesLastUsedAndRehashes(t *testing.T) {
 		Hasher:      hasher,
 		Policy:      NISTPolicy{},
 		Box:         fakeSecretBox{},
-		Attempts:    &fakeAttemptStore{},
+		Attempts:    attempts,
 		Clock:       fakeClock{now: now},
 	})
 	payload, err := service.sealHash(context.Background(), accountID, auth.PasswordHash{PHCString: "phc-old", ParamsID: "old"})
@@ -122,8 +123,14 @@ func TestVerifyPasswordUpdatesLastUsedAndRehashes(t *testing.T) {
 	if result.AccountID != accountID || result.CredentialID != credentialID || result.MFAStatus != auth.MFAStatusRequired || !result.Session.Partial {
 		t.Fatalf("auth result = %#v", result)
 	}
+	if len(result.FactorChecks) != 2 || !result.FactorChecks[0].Verified() || result.FactorChecks[1].Kind != account.FactorKindPassword {
+		t.Fatalf("factor checks = %#v", result.FactorChecks)
+	}
 	if repo.update.CredentialID != credentialID || repo.update.LastUsedAt != now || len(repo.update.EncryptedPayload) == 0 {
 		t.Fatalf("credential update = %#v", repo.update)
+	}
+	if attempts.success.AccountID != accountID || len(attempts.success.FactorChecks) != 2 || !attempts.success.FactorChecks[1].Verified() {
+		t.Fatalf("recorded success = %#v", attempts.success)
 	}
 	if hasher.verifyReq.Hash.PHCString != "phc-old" || hasher.hashReq.Password != "correct horse battery staple" {
 		t.Fatalf("hasher calls = %#v / %#v", hasher.verifyReq, hasher.hashReq)
@@ -166,6 +173,9 @@ func TestVerifyPasswordFailureRecordsLockout(t *testing.T) {
 	}
 	if attempts.fail.AccountID != accountID || attempts.fail.Username != "celeste" {
 		t.Fatalf("recorded failure = %#v", attempts.fail)
+	}
+	if attempts.fail.FactorCheck.Kind != account.FactorKindPassword || !attempts.fail.FactorCheck.Failed() {
+		t.Fatalf("recorded failed factor = %#v", attempts.fail.FactorCheck)
 	}
 	if repo.update.CredentialID != (account.CredentialID{}) {
 		t.Fatalf("credential should not be updated on failure: %#v", repo.update)

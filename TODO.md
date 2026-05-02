@@ -301,12 +301,12 @@ policy.
   - [x] Argon2id hash with pepper.
   - [x] Password verification outside DB transactions.
   - [x] Rehash on login when parameters change.
-- [ ] Reuse or port from Zitadel:
-  - [ ] `backend/v3/domain/session_check_password.go` for the factor update
+- [x] Reuse or port from Zitadel:
+  - [x] `backend/v3/domain/session_check_password.go` for the factor update
     model.
-  - [ ] `internal/command/user_human_password.go` for transaction boundaries
+  - [x] `internal/command/user_human_password.go` for transaction boundaries
     and lockout flow.
-  - [ ] `internal/command/user_human_password_test.go` for failure and lockout
+  - [x] `internal/command/user_human_password_test.go` for failure and lockout
     cases.
 - [ ] Keep Aether-specific behavior:
   - [x] No copied password composition rules.
