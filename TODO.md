@@ -370,11 +370,11 @@ tokens and factor state.
   - [x] Required factors derived from account and org policy.
   - [x] Upgrade from partial session to full session only after required
     factors are verified.
-- [ ] Reuse or port Zitadel's session factor model:
-  - [ ] `backend/v3/domain/session_factor.go`.
-  - [ ] `backend/v3/domain/session_check_user.go`.
-  - [ ] `backend/v3/domain/session_check_totp.go`.
-  - [ ] `backend/v3/domain/session_check_recovery_code.go`.
+- [x] Reuse or port Zitadel's session factor model:
+  - [x] `backend/v3/domain/session_factor.go`.
+  - [x] `backend/v3/domain/session_check_user.go`.
+  - [x] `backend/v3/domain/session_check_totp.go`.
+  - [x] `backend/v3/domain/session_check_recovery_code.go`.
 - [ ] Implement `internal/auth/totp`:
   - [ ] TOTP enrollment with QR provisioning URI.
   - [ ] Secret encryption with AES-256-GCM.

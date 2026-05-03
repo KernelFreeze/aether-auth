@@ -19,6 +19,7 @@ import (
 
 	"github.com/KernelFreeze/aether-auth/internal/account"
 	"github.com/KernelFreeze/aether-auth/internal/auth"
+	"github.com/KernelFreeze/aether-auth/internal/mfa"
 	"github.com/KernelFreeze/aether-auth/internal/platform/config"
 	"github.com/KernelFreeze/aether-auth/internal/platform/paseto"
 )
@@ -756,19 +757,7 @@ func fingerprintUserAgent(ip, userAgent string) string {
 }
 
 func normalizeFactors(factors []account.FactorKind) []account.FactorKind {
-	seen := make(map[account.FactorKind]struct{}, len(factors))
-	normalized := make([]account.FactorKind, 0, len(factors))
-	for _, factor := range factors {
-		if !factor.Valid() {
-			continue
-		}
-		if _, ok := seen[factor]; ok {
-			continue
-		}
-		seen[factor] = struct{}{}
-		normalized = append(normalized, factor)
-	}
-	return normalized
+	return mfa.NormalizeFactorKinds(factors)
 }
 
 func factorRecords(sessionID account.SessionID, factors []account.FactorKind, bindings []string, now time.Time) []FactorRecord {

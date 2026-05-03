@@ -61,6 +61,7 @@ type PolicyRequest struct {
 	AccountID          account.AccountID
 	OrganizationID     account.OrganizationID
 	AccountMFAEnforced bool
+	SessionFactors     SessionFactors
 	VerifiedFactors    []account.FactorKind
 }
 
@@ -103,7 +104,10 @@ func (s *PolicyService) Evaluate(ctx context.Context, req PolicyRequest) (Policy
 		return PolicyDecision{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "mfa account id is required", nil)
 	}
 
-	verified := normalizeFactors(req.VerifiedFactors)
+	verified := req.SessionFactors.VerifiedKinds()
+	if len(verified) == 0 {
+		verified = NormalizeFactorKinds(req.VerifiedFactors)
+	}
 	primary := s.primary()
 	second := s.secondFactors()
 	reasons := make([]PolicyReason, 0, 2)
@@ -225,25 +229,9 @@ func defaultSecondFactorOptions() []account.FactorKind {
 }
 
 func factorsOrDefault(values, defaults []account.FactorKind) []account.FactorKind {
-	normalized := normalizeFactors(values)
+	normalized := NormalizeFactorKinds(values)
 	if len(normalized) == 0 {
 		return append([]account.FactorKind(nil), defaults...)
-	}
-	return normalized
-}
-
-func normalizeFactors(values []account.FactorKind) []account.FactorKind {
-	seen := make(map[account.FactorKind]struct{}, len(values))
-	normalized := make([]account.FactorKind, 0, len(values))
-	for _, factor := range values {
-		if !factor.Valid() {
-			continue
-		}
-		if _, ok := seen[factor]; ok {
-			continue
-		}
-		seen[factor] = struct{}{}
-		normalized = append(normalized, factor)
 	}
 	return normalized
 }

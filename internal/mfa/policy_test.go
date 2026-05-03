@@ -115,6 +115,36 @@ func TestPolicyServiceEvaluateReportsMissingFactors(t *testing.T) {
 	}
 }
 
+func TestPolicyServiceEvaluateUsesSessionFactorState(t *testing.T) {
+	now := time.Date(2026, 5, 3, 13, 30, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000911")
+	service := NewPolicyService(PolicyDeps{})
+	factors := SessionFactors{
+		{Kind: account.FactorKindUser, LastVerifiedAt: now},
+		{Kind: account.FactorKindPassword, LastVerifiedAt: now},
+		{Kind: account.FactorKindTOTP, LastFailedAt: now.Add(time.Second)},
+	}
+
+	decision, err := service.Evaluate(context.Background(), PolicyRequest{
+		AccountID:          accountID,
+		AccountMFAEnforced: true,
+		SessionFactors:     factors,
+	})
+	if err != nil {
+		t.Fatalf("evaluate policy: %v", err)
+	}
+
+	if decision.Satisfied || decision.Status != auth.MFAStatusRequired {
+		t.Fatalf("decision = %#v", decision)
+	}
+	if !reflect.DeepEqual(decision.VerifiedFactors, []account.FactorKind{
+		account.FactorKindUser,
+		account.FactorKindPassword,
+	}) {
+		t.Fatalf("verified factors = %#v", decision.VerifiedFactors)
+	}
+}
+
 func TestPolicyServiceEvaluateNoRequirementIsSatisfied(t *testing.T) {
 	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000905")
 	service := NewPolicyService(PolicyDeps{})
