@@ -53,6 +53,14 @@ WHERE id = sqlc.arg(id)
   AND status = 'active'
   AND expires_at > sqlc.arg(active_at);
 
+-- name: GetActivePartialSessionByID :one
+SELECT *
+FROM sessions
+WHERE id = sqlc.arg(id)
+  AND kind = 'partial'
+  AND status = 'active'
+  AND expires_at > sqlc.arg(active_at);
+
 -- name: ListSessionsByAccount :many
 SELECT *
 FROM sessions

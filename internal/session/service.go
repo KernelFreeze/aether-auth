@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	gopaseto "aidanwoods.dev/go-paseto"
 	"github.com/google/uuid"
 
 	"github.com/KernelFreeze/aether-auth/internal/account"
@@ -70,6 +71,7 @@ type Store interface {
 	CreateFullSession(context.Context, FullSessionRecord) error
 	CreatePartialSession(context.Context, PartialSessionRecord) error
 	GetActiveSession(context.Context, account.SessionID, time.Time) (SessionRecord, error)
+	GetActivePartialSession(context.Context, account.SessionID, time.Time) (SessionRecord, []FactorRecord, error)
 	ListActiveSessions(context.Context, account.AccountID, time.Time) ([]AccountSessionRecord, error)
 	RevokeAccountSessions(context.Context, AccountSessionsRevocation) ([]SessionRecord, error)
 	RevokeSession(context.Context, SessionRevocation) (SessionRecord, error)
@@ -86,6 +88,11 @@ type AccessTokenRevocationCache interface {
 type TokenIssuer interface {
 	IssueAccessToken(context.Context, paseto.IssueRequest) (string, error)
 	IssuePartialSessionToken(context.Context, paseto.IssueRequest) (string, error)
+}
+
+// PartialSessionTokenVerifier decrypts PASETO v4.local partial-session tokens.
+type PartialSessionTokenVerifier interface {
+	VerifyPartialSessionToken(context.Context, string, []byte, ...paseto.Rule) (*paseto.Token, error)
 }
 
 // IDGenerator creates persisted session IDs.
@@ -255,6 +262,7 @@ type Service struct {
 }
 
 var _ auth.SessionIssuer = (*Service)(nil)
+var _ auth.PartialSessionVerifier = (*Service)(nil)
 
 // ServiceDeps contains collaborators for session issuance.
 type ServiceDeps struct {
@@ -453,6 +461,63 @@ func (s *Service) IssuePartialSession(ctx context.Context, req auth.PartialSessi
 		SessionID: sessionID,
 		Token:     token,
 		ExpiresAt: expiresAt,
+	}, nil
+}
+
+// VerifyPartialSession validates an active partial-session row and decrypts the
+// matching PASETO v4.local token before MFA verification.
+func (s *Service) VerifyPartialSession(ctx context.Context, req auth.PartialSessionVerifyRequest) (auth.PartialSession, error) {
+	if err := s.storeReady(); err != nil {
+		return auth.PartialSession{}, err
+	}
+	verifier, ok := s.tokens.(PartialSessionTokenVerifier)
+	if s.tokens == nil || !ok {
+		return auth.PartialSession{}, auth.NewServiceError(auth.ErrorKindInternal, "partial session verifier is nil", nil)
+	}
+	if req.SessionID.IsZero() || strings.TrimSpace(req.Token) == "" {
+		return auth.PartialSession{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "partial session id and token are required", nil)
+	}
+
+	now := s.now(req.Now)
+	record, factors, err := s.store.GetActivePartialSession(ctx, req.SessionID, now)
+	if err != nil {
+		return auth.PartialSession{}, err
+	}
+	if record.ID != req.SessionID || record.AccountID.IsZero() || record.Kind != sessionKindPartial || record.Status != sessionStatusActive {
+		return auth.PartialSession{}, auth.ErrInvalidCredentials
+	}
+
+	rules := make([]paseto.Rule, 0, 1)
+	if strings.TrimSpace(s.cfg.Issuer) != "" {
+		rules = append(rules, gopaseto.IssuedBy(s.cfg.Issuer))
+	}
+	token, err := verifier.VerifyPartialSessionToken(ctx, strings.TrimSpace(req.Token), implicitAssertion("partial", record.AccountID, record.ID, account.ClientID{}), rules...)
+	if err != nil {
+		return auth.PartialSession{}, auth.ErrInvalidCredentials
+	}
+	claims, err := partialSessionClaims(token)
+	if err != nil {
+		return auth.PartialSession{}, err
+	}
+	if claims.AccountID != record.AccountID || claims.SessionID != record.ID {
+		return auth.PartialSession{}, auth.ErrInvalidCredentials
+	}
+
+	verified := factorKindsFromRecords(factors)
+	if len(verified) == 0 {
+		verified = claims.Factors
+	}
+	bindings := challengeBindingsFromRecords(factors)
+	if len(bindings) == 0 {
+		bindings = claims.ChallengeBindings
+	}
+
+	return auth.PartialSession{
+		ID:                record.ID,
+		AccountID:         record.AccountID,
+		VerifiedFactors:   verified,
+		ChallengeBindings: bindings,
+		ExpiresAt:         account.NormalizeTimestamp(record.ExpiresAt),
 	}, nil
 }
 
@@ -841,12 +906,73 @@ func partialClaims(in partialClaimInput) map[string]any {
 	return claims
 }
 
+type verifiedPartialClaims struct {
+	AccountID         account.AccountID
+	SessionID         account.SessionID
+	Factors           []account.FactorKind
+	ChallengeBindings []string
+}
+
+func partialSessionClaims(token *paseto.Token) (verifiedPartialClaims, error) {
+	if token == nil {
+		return verifiedPartialClaims{}, auth.ErrInvalidCredentials
+	}
+	var body struct {
+		Type              string   `json:"typ"`
+		Subject           string   `json:"sub"`
+		Session           string   `json:"sid"`
+		Factors           []string `json:"factors"`
+		ChallengeBindings []string `json:"challenge_bindings"`
+	}
+	if err := token.Get("typ", &body.Type); err != nil {
+		return verifiedPartialClaims{}, auth.ErrInvalidCredentials
+	}
+	if err := token.Get("sub", &body.Subject); err != nil {
+		return verifiedPartialClaims{}, auth.ErrInvalidCredentials
+	}
+	if err := token.Get("sid", &body.Session); err != nil {
+		return verifiedPartialClaims{}, auth.ErrInvalidCredentials
+	}
+	_ = token.Get("factors", &body.Factors)
+	_ = token.Get("challenge_bindings", &body.ChallengeBindings)
+
+	if body.Type != "partial_session" {
+		return verifiedPartialClaims{}, auth.ErrInvalidCredentials
+	}
+	accountID, err := account.ParseAccountID(body.Subject)
+	if err != nil {
+		return verifiedPartialClaims{}, auth.ErrInvalidCredentials
+	}
+	sessionID, err := account.ParseSessionID(body.Session)
+	if err != nil {
+		return verifiedPartialClaims{}, auth.ErrInvalidCredentials
+	}
+	return verifiedPartialClaims{
+		AccountID:         accountID,
+		SessionID:         sessionID,
+		Factors:           factorKindsFromStrings(body.Factors),
+		ChallengeBindings: cleanStrings(body.ChallengeBindings),
+	}, nil
+}
+
 func factorStrings(factors []account.FactorKind) []string {
 	values := make([]string, 0, len(factors))
 	for _, factor := range factors {
 		values = append(values, factor.String())
 	}
 	return values
+}
+
+func factorKindsFromStrings(values []string) []account.FactorKind {
+	factors := make([]account.FactorKind, 0, len(values))
+	for _, value := range values {
+		factor, err := account.ParseFactorKind(value)
+		if err != nil {
+			continue
+		}
+		factors = append(factors, factor)
+	}
+	return normalizeFactors(factors)
 }
 
 func factorKindsFromRecords(records []FactorRecord) []account.FactorKind {
@@ -857,6 +983,14 @@ func factorKindsFromRecords(records []FactorRecord) []account.FactorKind {
 		}
 	}
 	return normalizeFactors(factors)
+}
+
+func challengeBindingsFromRecords(records []FactorRecord) []string {
+	bindings := make([]string, 0, len(records))
+	for _, record := range records {
+		bindings = append(bindings, strings.TrimSpace(record.ChallengeBinding))
+	}
+	return cleanStrings(bindings)
 }
 
 func implicitAssertion(kind string, accountID account.AccountID, sessionID account.SessionID, clientID account.ClientID) []byte {

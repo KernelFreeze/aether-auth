@@ -18,7 +18,9 @@ import (
 	"github.com/KernelFreeze/aether-auth/internal/account"
 	"github.com/KernelFreeze/aether-auth/internal/auth"
 	"github.com/KernelFreeze/aether-auth/internal/auth/password"
+	"github.com/KernelFreeze/aether-auth/internal/auth/totp"
 	"github.com/KernelFreeze/aether-auth/internal/httpapi"
+	"github.com/KernelFreeze/aether-auth/internal/mfa"
 	"github.com/KernelFreeze/aether-auth/internal/passwordreset"
 	"github.com/KernelFreeze/aether-auth/internal/platform/config"
 	"github.com/KernelFreeze/aether-auth/internal/platform/db"
@@ -104,6 +106,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	totpService, err := newTOTPService(ctx, cfg, sec, pool, queries)
+	if err != nil {
+		return err
+	}
 	sessionStore := session.NewSQLStore(pool, queries)
 	sessionIssuer := session.NewService(session.ServiceDeps{
 		Store:       sessionStore,
@@ -134,6 +140,7 @@ func run() error {
 					Store: account.NewSQLCredentialStore(queries),
 				}),
 				Sessions: sessionIssuer,
+				TOTP:     accountTOTPManager{service: totpService},
 			}),
 			Auth: auth.New(auth.Deps{
 				Registration: account.NewRegistrationService(account.RegistrationDeps{
@@ -142,6 +149,14 @@ func run() error {
 				}),
 				Login:    orchestrator,
 				Sessions: sessionIssuer,
+			}),
+			MFA: mfa.New(mfa.Deps{
+				Policy: mfa.NewPolicyService(mfa.PolicyDeps{
+					Sessions: sessionIssuer,
+				}),
+				PartialSessions: sessionIssuer,
+				Accounts:        auth.NewSQLAccountRepository(queries),
+				TOTP:            totpService,
 			}),
 			PasswordReset: passwordreset.New(passwordreset.Deps{
 				Requester: passwordreset.NewService(passwordreset.ServiceDeps{
@@ -235,6 +250,103 @@ func newPasswordService(ctx context.Context, cfg *config.Config, sec secrets.Pro
 		PartialSessionTTL: cfg.Session.PartialSessionTTL,
 		DummyHash:         dummyHash,
 	}), nil
+}
+
+func newTOTPService(ctx context.Context, cfg *config.Config, sec secrets.Provider, pool interface {
+	sqlc.DBTX
+	Begin(context.Context) (pgx.Tx, error)
+}, queries sqlc.Querier) (*totp.Service, error) {
+	pepper, err := sec.Resolve(ctx, cfg.Secrets.Pepper)
+	if err != nil {
+		return nil, err
+	}
+	box, err := password.NewAESGCMBox(ctx, sec, cfg.Secrets.AESKey, rand.Reader)
+	if err != nil {
+		return nil, err
+	}
+	return totp.New(totp.Deps{
+		Credentials: auth.NewSQLCredentialRepository(queries, auth.UUIDGenerator{}, auth.CredentialPayloadConfig{
+			Algorithm: "aes-256-gcm",
+			KeyRef:    cfg.Secrets.AESKey,
+			Version:   1,
+		}),
+		RecoveryCodes: totp.NewSQLRecoveryCodeStore(pool),
+		Hasher:        password.NewArgon2idHasher(cfg.Argon2, pepper, rand.Reader),
+		Box:           box,
+		Attempts:      totp.NewSQLAttemptStore(pool, totp.LockoutPolicyFromConfig(cfg.Lockout)),
+		Random:        rand.Reader,
+		Config: totp.Config{
+			Issuer: cfg.Issuer.URL,
+		},
+	}), nil
+}
+
+type accountTOTPManager struct {
+	service *totp.Service
+}
+
+func (m accountTOTPManager) EnrollTOTP(ctx context.Context, req account.TOTPEnrollmentRequest) (account.TOTPEnrollment, error) {
+	enrollment, err := m.service.Enroll(ctx, totp.EnrollRequest{
+		AccountID:   req.AccountID,
+		Issuer:      req.Issuer,
+		AccountName: req.AccountName,
+	})
+	if err != nil {
+		return account.TOTPEnrollment{}, accountMFAError(err)
+	}
+	return account.TOTPEnrollment{
+		AccountID:       enrollment.AccountID,
+		CredentialID:    enrollment.CredentialID,
+		Secret:          enrollment.Secret,
+		ProvisioningURI: enrollment.ProvisioningURI,
+	}, nil
+}
+
+func (m accountTOTPManager) ConfirmTOTP(ctx context.Context, req account.TOTPConfirmRequest) (account.TOTPCredential, error) {
+	credential, err := m.service.ConfirmEnrollment(ctx, totp.ConfirmEnrollmentRequest{
+		AccountID:    req.AccountID,
+		CredentialID: req.CredentialID,
+		Code:         req.Code,
+		Endpoint:     req.Endpoint,
+	})
+	if err != nil {
+		return account.TOTPCredential{}, accountMFAError(err)
+	}
+	return account.TOTPCredential{
+		ID:        credential.ID,
+		AccountID: credential.AccountID,
+		Kind:      credential.Kind,
+		Verified:  credential.Verified,
+	}, nil
+}
+
+func (m accountTOTPManager) GenerateRecoveryCodes(ctx context.Context, req account.RecoveryCodeGenerateRequest) (account.GeneratedRecoveryCodes, error) {
+	generated, err := m.service.GenerateRecoveryCodes(ctx, totp.GenerateRecoveryCodesRequest{
+		AccountID:    req.AccountID,
+		CredentialID: req.CredentialID,
+	})
+	if err != nil {
+		return account.GeneratedRecoveryCodes{}, accountMFAError(err)
+	}
+	return account.GeneratedRecoveryCodes{
+		AccountID:    generated.AccountID,
+		CredentialID: generated.CredentialID,
+		Codes:        append([]string(nil), generated.Codes...),
+	}, nil
+}
+
+func accountMFAError(err error) error {
+	switch {
+	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrLockedAccount):
+		return account.ErrInvalidMFA
+	case errors.Is(err, auth.ErrMalformedInput):
+		return account.ErrMalformedMFA
+	default:
+		if kind, ok := auth.ErrorKindOf(err); ok && kind == auth.ErrorKindMalformedInput {
+			return account.ErrMalformedMFA
+		}
+		return err
+	}
 }
 
 func shutdownTimeout(cfg *config.Config) time.Duration {

@@ -277,6 +277,61 @@ func TestServiceIssuePartialSessionCreatesBoundToken(t *testing.T) {
 	}
 }
 
+func TestServiceVerifyPartialSessionUsesStoredSessionBinding(t *testing.T) {
+	now := time.Now().UTC()
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000821")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000822")
+	store := &fakeStore{}
+	service := NewService(ServiceDeps{
+		Store:  store,
+		Tokens: newTestKeystore(t),
+		Random: bytes.NewReader(bytes.Repeat([]byte{0x39}, randomTokenBytes)),
+		IDs: fixedIDs{
+			sessionIDs: []account.SessionID{sessionID},
+		},
+		Config: Config{
+			Issuer:     "https://auth.example.test",
+			PartialTTL: time.Minute,
+		},
+	})
+
+	issued, err := service.IssuePartialSession(context.Background(), auth.PartialSessionIssueRequest{
+		AccountID:         accountID,
+		VerifiedFactors:   []account.FactorKind{account.FactorKindUser, account.FactorKindPassword},
+		ChallengeBindings: []string{"user-check", "password-check"},
+		Now:               now,
+	})
+	if err != nil {
+		t.Fatalf("issue partial: %v", err)
+	}
+	store.activePartial = store.partial.Session
+	store.activePartialFactors = store.partial.Factors
+
+	verified, err := service.VerifyPartialSession(context.Background(), auth.PartialSessionVerifyRequest{
+		SessionID: issued.SessionID,
+		Token:     issued.Token,
+		Now:       now,
+	})
+	if err != nil {
+		t.Fatalf("verify partial: %v", err)
+	}
+	if verified.ID != sessionID || verified.AccountID != accountID || verified.ExpiresAt != now.Add(time.Minute) {
+		t.Fatalf("verified partial = %#v", verified)
+	}
+	if !reflect.DeepEqual(verified.VerifiedFactors, []account.FactorKind{account.FactorKindUser, account.FactorKindPassword}) {
+		t.Fatalf("verified factors = %#v", verified.VerifiedFactors)
+	}
+
+	_, err = service.VerifyPartialSession(context.Background(), auth.PartialSessionVerifyRequest{
+		SessionID: sessionID,
+		Token:     issued.Token + "tampered",
+		Now:       now,
+	})
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("tampered token error = %v, want invalid credentials", err)
+	}
+}
+
 func TestServiceIssueSessionAccessTokenVerifiesWithKeystore(t *testing.T) {
 	now := time.Now().UTC()
 	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000831")
@@ -518,6 +573,8 @@ type fakeStore struct {
 	revoked                 SessionRecord
 	accountRevoked          []SessionRecord
 	activeSessions          []AccountSessionRecord
+	activePartial           SessionRecord
+	activePartialFactors    []FactorRecord
 	rotationErr             error
 }
 
@@ -538,6 +595,13 @@ func (s *fakeStore) GetActiveSession(_ context.Context, sessionID account.Sessio
 		return s.revoked, nil
 	}
 	return SessionRecord{}, auth.ErrInvalidCredentials
+}
+
+func (s *fakeStore) GetActivePartialSession(_ context.Context, sessionID account.SessionID, _ time.Time) (SessionRecord, []FactorRecord, error) {
+	if s.activePartial.ID == sessionID {
+		return s.activePartial, append([]FactorRecord(nil), s.activePartialFactors...), nil
+	}
+	return SessionRecord{}, nil, auth.ErrInvalidCredentials
 }
 
 func (s *fakeStore) ListActiveSessions(_ context.Context, accountID account.AccountID, activeAt time.Time) ([]AccountSessionRecord, error) {

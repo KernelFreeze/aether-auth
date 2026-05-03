@@ -13,6 +13,7 @@ type Deps struct {
 	Profiles    ProfileManager
 	Credentials CredentialManager
 	Sessions    AccountSessionManager
+	TOTP        TOTPManager
 }
 
 // ProfileManager is the profile service surface used by HTTP handlers.
@@ -33,11 +34,20 @@ type AccountSessionManager interface {
 	RevokeAccountSession(context.Context, AccountID, SessionID) error
 }
 
+// TOTPManager owns TOTP enrollment and recovery-code regeneration for account
+// settings routes.
+type TOTPManager interface {
+	EnrollTOTP(context.Context, TOTPEnrollmentRequest) (TOTPEnrollment, error)
+	ConfirmTOTP(context.Context, TOTPConfirmRequest) (TOTPCredential, error)
+	GenerateRecoveryCodes(context.Context, RecoveryCodeGenerateRequest) (GeneratedRecoveryCodes, error)
+}
+
 // Module owns account and credential HTTP handlers.
 type Module struct {
 	profiles    profileManager
 	credentials credentialManager
 	sessions    accountSessionManager
+	totp        TOTPManager
 }
 
 type profileManager interface {
@@ -63,6 +73,7 @@ func New(deps Deps) *Module {
 		profiles:    deps.Profiles,
 		credentials: deps.Credentials,
 		sessions:    deps.Sessions,
+		totp:        deps.TOTP,
 	}
 }
 
@@ -81,4 +92,8 @@ func (m *Module) RegisterRoutes(r gin.IRouter, mw httpapi.Middlewares) {
 	protected.DELETE("/credentials/:credential_id", m.handleRemoveCredential)
 	protected.GET("/sessions", m.handleListSessions)
 	protected.DELETE("/sessions/:id", m.handleRevokeSession)
+	protected.POST("/mfa/totp/enroll", m.handleEnrollTOTP)
+	protected.POST("/mfa/totp/confirm", m.handleConfirmTOTP)
+	protected.DELETE("/mfa/totp/:credential_id", m.handleDisableTOTP)
+	protected.POST("/mfa/recovery-codes/regenerate", m.handleRegenerateRecoveryCodes)
 }

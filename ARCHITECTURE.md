@@ -137,6 +137,9 @@ factor, and single-use recovery codes. TOTP secrets and credential blobs are
 encrypted at rest. Recovery codes are generated from a cryptographic random
 source and stored as hashes.
 
+Account settings expose TOTP enrollment, confirmation, disable, and recovery
+code regeneration. Raw recovery codes are returned only when they are generated.
+
 ## Sessions and tokens
 
 A successful login creates a server-side session and returns two client tokens:
@@ -298,6 +301,10 @@ POST   /oauth/revoke
 
 GET    /account/sessions
 DELETE /account/sessions/{id}
+POST   /account/mfa/totp/enroll
+POST   /account/mfa/totp/confirm
+DELETE /account/mfa/totp/{credential_id}
+POST   /account/mfa/recovery-codes/regenerate
 GET    /account/authorized-apps
 DELETE /account/authorized-apps/{client_id}
 

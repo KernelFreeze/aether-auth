@@ -390,21 +390,21 @@ tokens and factor state.
 - [x] Do not copy:
   - [x] Zitadel AES-CFB helpers for encrypted-at-rest data.
   - [x] Biased random string generation for recovery codes.
-- [ ] Add routes:
-  - [ ] `POST /auth/mfa/verify`.
-  - [ ] TOTP enrollment, confirmation, disable, and recovery-code regenerate
+- [x] Add routes:
+  - [x] `POST /auth/mfa/verify`.
+  - [x] TOTP enrollment, confirmation, disable, and recovery-code regenerate
     endpoints under account settings.
 - [ ] Add tests:
-  - [ ] TOTP clock-window behavior.
-  - [ ] Recovery code single-use behavior.
-  - [ ] Partial session cannot be upgraded without required factors.
+  - [x] TOTP clock-window behavior.
+  - [x] Recovery code single-use behavior.
+  - [x] Partial session cannot be upgraded without required factors.
   - [ ] MFA failures are audited without logging raw codes.
 
 Exit criteria:
 
-- [ ] Password plus TOTP can complete a full login flow.
-- [ ] Recovery codes are single-use and never stored in plaintext.
-- [ ] MFA state is represented as factors, not hard-coded branches.
+- [x] Password plus TOTP can complete a full login flow.
+- [x] Recovery codes are single-use and never stored in plaintext.
+- [x] MFA state is represented as factors, not hard-coded branches.
 
 ## Stage 8: WebAuthn and passkeys using Zitadel reuse
 

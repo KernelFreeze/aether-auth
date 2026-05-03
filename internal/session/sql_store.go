@@ -120,6 +120,36 @@ func (s *SQLStore) GetActiveSession(ctx context.Context, sessionID account.Sessi
 	return sessionRecordFromSQL(row), nil
 }
 
+// GetActivePartialSession loads an active partial session and its verified
+// factors for MFA upgrade.
+func (s *SQLStore) GetActivePartialSession(ctx context.Context, sessionID account.SessionID, activeAt time.Time) (SessionRecord, []FactorRecord, error) {
+	if err := s.ready(); err != nil {
+		return SessionRecord{}, nil, err
+	}
+	if sessionID.IsZero() {
+		return SessionRecord{}, nil, auth.NewServiceError(auth.ErrorKindMalformedInput, "partial session id is required", nil)
+	}
+	activeAt = account.NormalizeTimestamp(activeAt)
+	if activeAt.IsZero() {
+		activeAt = account.NormalizeTimestamp(time.Now())
+	}
+	row, err := s.queries.GetActivePartialSessionByID(ctx, sqlc.GetActivePartialSessionByIDParams{
+		ID:       sessionIDToPG(sessionID),
+		ActiveAt: timeToTimestamptz(activeAt),
+	})
+	if errors.Is(err, pgx.ErrNoRows) {
+		return SessionRecord{}, nil, auth.ErrInvalidCredentials
+	}
+	if err != nil {
+		return SessionRecord{}, nil, fmt.Errorf("session: lookup active partial session: %w", err)
+	}
+	factorRows, err := s.queries.ListSessionFactors(ctx, sessionIDToPG(sessionID))
+	if err != nil {
+		return SessionRecord{}, nil, fmt.Errorf("session: list partial session factors: %w", err)
+	}
+	return sessionRecordFromSQL(row), factorRecordsFromSQL(factorRows), nil
+}
+
 // ListActiveSessions loads active full sessions for the account self-service API.
 func (s *SQLStore) ListActiveSessions(ctx context.Context, accountID account.AccountID, activeAt time.Time) ([]AccountSessionRecord, error) {
 	if err := s.ready(); err != nil {

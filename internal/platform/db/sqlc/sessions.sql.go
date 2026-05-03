@@ -189,6 +189,40 @@ func (q *Queries) CreateSessionFactor(ctx context.Context, arg CreateSessionFact
 	return i, err
 }
 
+const getActivePartialSessionByID = `-- name: GetActivePartialSessionByID :one
+SELECT id, account_id, client_id, kind, status, token_id, user_agent_id, ip, expires_at, revoked_at, created_at, updated_at
+FROM sessions
+WHERE id = $1
+  AND kind = 'partial'
+  AND status = 'active'
+  AND expires_at > $2
+`
+
+type GetActivePartialSessionByIDParams struct {
+	ID       pgtype.UUID        `json:"id"`
+	ActiveAt pgtype.Timestamptz `json:"active_at"`
+}
+
+func (q *Queries) GetActivePartialSessionByID(ctx context.Context, arg GetActivePartialSessionByIDParams) (Session, error) {
+	row := q.db.QueryRow(ctx, getActivePartialSessionByID, arg.ID, arg.ActiveAt)
+	var i Session
+	err := row.Scan(
+		&i.ID,
+		&i.AccountID,
+		&i.ClientID,
+		&i.Kind,
+		&i.Status,
+		&i.TokenID,
+		&i.UserAgentID,
+		&i.Ip,
+		&i.ExpiresAt,
+		&i.RevokedAt,
+		&i.CreatedAt,
+		&i.UpdatedAt,
+	)
+	return i, err
+}
+
 const getActiveSessionByID = `-- name: GetActiveSessionByID :one
 SELECT id, account_id, client_id, kind, status, token_id, user_agent_id, ip, expires_at, revoked_at, created_at, updated_at
 FROM sessions

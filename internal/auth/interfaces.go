@@ -203,10 +203,24 @@ type PartialSessionIssueResult struct {
 	ExpiresAt time.Time
 }
 
+// PartialSessionVerifyRequest contains the client-presented partial-session
+// token and public partial-session ID used during MFA verification.
+type PartialSessionVerifyRequest struct {
+	SessionID account.SessionID
+	Token     string
+	Now       time.Time
+}
+
 // SessionIssuer creates partial and full login sessions.
 type SessionIssuer interface {
 	IssueSession(context.Context, SessionIssueRequest) (SessionIssueResult, error)
 	IssuePartialSession(context.Context, PartialSessionIssueRequest) (PartialSessionIssueResult, error)
+}
+
+// PartialSessionVerifier verifies an MFA-bound partial session before a second
+// factor can upgrade it to a full session.
+type PartialSessionVerifier interface {
+	VerifyPartialSession(context.Context, PartialSessionVerifyRequest) (PartialSession, error)
 }
 
 // AuditEvent is a security-relevant event safe to write to the audit log.

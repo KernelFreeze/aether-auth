@@ -47,7 +47,7 @@ func NewRouter(d Deps) *gin.Engine {
 func registerFeatureRoutes(r *gin.Engine, modules FeatureModules, mw Middlewares) {
 	mountModule(r, "/account", modules.Account, mw)
 	mountModule(r, "/auth", modules.Auth, mw)
-	mountModule(r, "/mfa", modules.MFA, mw)
+	mountModule(r, "/auth/mfa", modules.MFA, mw)
 	mountModule(r, "/oauth", modules.OAuth, mw)
 	mountModule(r, "/org", modules.Organization, mw)
 	mountModule(r, "/auth/reset-password", modules.PasswordReset, mw)

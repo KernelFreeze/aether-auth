@@ -33,6 +33,7 @@ type Querier interface {
 	GetAccountByEmail(ctx context.Context, addressNormalized string) (Account, error)
 	GetAccountByID(ctx context.Context, id pgtype.UUID) (Account, error)
 	GetAccountByUsername(ctx context.Context, usernameNormalized string) (Account, error)
+	GetActivePartialSessionByID(ctx context.Context, arg GetActivePartialSessionByIDParams) (Session, error)
 	GetActiveSessionByID(ctx context.Context, arg GetActiveSessionByIDParams) (Session, error)
 	GetAuthChallenge(ctx context.Context, id string) (AuthChallenge, error)
 	GetCredentialByAccountKindProvider(ctx context.Context, arg GetCredentialByAccountKindProviderParams) (Credential, error)

@@ -209,6 +209,97 @@ func TestAccountModuleRevokesMissingSessionAsNotFound(t *testing.T) {
 	}
 }
 
+func TestAccountModuleTOTPRoutes(t *testing.T) {
+	accountID := mustCredentialAccountID(t, "018f1f74-10a1-7000-9000-000000000516")
+	totpID := mustCredentialCredentialID(t, "018f1f74-10a1-7000-9000-000000000517")
+	recoveryID := mustCredentialCredentialID(t, "018f1f74-10a1-7000-9000-000000000518")
+	reauthenticatedAt := time.Date(2026, 5, 3, 13, 0, 0, 0, time.UTC)
+	profiles := &fakeProfileManager{profile: AccountProfile{
+		ID:       accountID,
+		Username: "celeste",
+	}}
+	credentials := &fakeCredentialManager{
+		credentials: []Credential{
+			{ID: totpID, AccountID: accountID, Kind: CredentialKindTOTP, Verified: true},
+			{ID: recoveryID, AccountID: accountID, Kind: CredentialKindRecoveryCode, Verified: true},
+		},
+	}
+	totpManager := &fakeTOTPManager{
+		enrollment: TOTPEnrollment{
+			AccountID:       accountID,
+			CredentialID:    totpID,
+			Secret:          "JBSWY3DPEHPK3PXP",
+			ProvisioningURI: "otpauth://totp/Aether%20Auth:celeste?secret=JBSWY3DPEHPK3PXP",
+		},
+		confirmed: TOTPCredential{
+			ID:        totpID,
+			AccountID: accountID,
+			Kind:      CredentialKindTOTP,
+			Verified:  true,
+		},
+		recovery: GeneratedRecoveryCodes{
+			AccountID:    accountID,
+			CredentialID: recoveryID,
+			Codes:        []string{"ABCD1234EFGH", "JKLM5678NPQR"},
+		},
+	}
+	router := accountTestRouter(t, New(Deps{
+		Profiles:    profiles,
+		Credentials: credentials,
+		TOTP:        totpManager,
+	}), authenticatedAs(accountID, reauthenticatedAt))
+
+	enrollRec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodPost, "/account/mfa/totp/enroll", map[string]any{
+		"issuer": "Aether Auth",
+	}))
+	if enrollRec.Code != http.StatusCreated {
+		t.Fatalf("enroll status = %d, want %d: %s", enrollRec.Code, http.StatusCreated, enrollRec.Body.String())
+	}
+	if totpManager.enrollReq.AccountID != accountID || totpManager.enrollReq.AccountName != "celeste" || totpManager.enrollReq.Issuer != "Aether Auth" {
+		t.Fatalf("enroll request = %#v", totpManager.enrollReq)
+	}
+	var enrollment totpEnrollmentResponse
+	testutil.DecodeJSON(t, enrollRec.Body, &enrollment)
+	if enrollment.CredentialID != totpID.String() || enrollment.Secret == "" || enrollment.ProvisioningURI == "" {
+		t.Fatalf("enrollment response = %#v", enrollment)
+	}
+
+	confirmRec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodPost, "/account/mfa/totp/confirm", map[string]any{
+		"credential_id": totpID.String(),
+		"code":          "123456",
+	}))
+	if confirmRec.Code != http.StatusOK {
+		t.Fatalf("confirm status = %d, want %d: %s", confirmRec.Code, http.StatusOK, confirmRec.Body.String())
+	}
+	if totpManager.confirmReq.AccountID != accountID || totpManager.confirmReq.CredentialID != totpID || totpManager.confirmReq.Code != "123456" {
+		t.Fatalf("confirm request = %#v", totpManager.confirmReq)
+	}
+
+	recoveryRec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodPost, "/account/mfa/recovery-codes/regenerate", map[string]any{
+		"credential_id": recoveryID.String(),
+	}))
+	if recoveryRec.Code != http.StatusOK {
+		t.Fatalf("recovery status = %d, want %d: %s", recoveryRec.Code, http.StatusOK, recoveryRec.Body.String())
+	}
+	body := recoveryRec.Body.String()
+	if strings.Contains(body, "hash") || strings.Contains(body, "payload") {
+		t.Fatalf("recovery response leaked storage material: %s", body)
+	}
+	var recovery recoveryCodesResponse
+	testutil.DecodeJSON(t, strings.NewReader(body), &recovery)
+	if recovery.CredentialID != recoveryID.String() || len(recovery.Codes) != 2 {
+		t.Fatalf("recovery response = %#v", recovery)
+	}
+
+	disableRec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodDelete, "/account/mfa/totp/"+totpID.String(), nil))
+	if disableRec.Code != http.StatusNoContent {
+		t.Fatalf("disable status = %d, want %d: %s", disableRec.Code, http.StatusNoContent, disableRec.Body.String())
+	}
+	if credentials.remove.AccountID != accountID || credentials.remove.CredentialID != totpID || !credentials.remove.ReauthenticatedAt.Equal(reauthenticatedAt) {
+		t.Fatalf("disable request = %#v", credentials.remove)
+	}
+}
+
 func TestAccountModuleRequiresAuthentication(t *testing.T) {
 	router := accountTestRouter(t, New(Deps{Profiles: &fakeProfileManager{}}), func(c *gin.Context) {
 		c.Next()
@@ -313,6 +404,40 @@ func (m *fakeCredentialManager) RemoveCredential(_ context.Context, req RemoveCr
 		return Credential{}, m.removeErr
 	}
 	return Credential{ID: req.CredentialID, AccountID: req.AccountID}, nil
+}
+
+type fakeTOTPManager struct {
+	enrollReq   TOTPEnrollmentRequest
+	confirmReq  TOTPConfirmRequest
+	recoveryReq RecoveryCodeGenerateRequest
+	enrollment  TOTPEnrollment
+	confirmed   TOTPCredential
+	recovery    GeneratedRecoveryCodes
+	err         error
+}
+
+func (m *fakeTOTPManager) EnrollTOTP(_ context.Context, req TOTPEnrollmentRequest) (TOTPEnrollment, error) {
+	m.enrollReq = req
+	if m.err != nil {
+		return TOTPEnrollment{}, m.err
+	}
+	return m.enrollment, nil
+}
+
+func (m *fakeTOTPManager) ConfirmTOTP(_ context.Context, req TOTPConfirmRequest) (TOTPCredential, error) {
+	m.confirmReq = req
+	if m.err != nil {
+		return TOTPCredential{}, m.err
+	}
+	return m.confirmed, nil
+}
+
+func (m *fakeTOTPManager) GenerateRecoveryCodes(_ context.Context, req RecoveryCodeGenerateRequest) (GeneratedRecoveryCodes, error) {
+	m.recoveryReq = req
+	if m.err != nil {
+		return GeneratedRecoveryCodes{}, m.err
+	}
+	return m.recovery, nil
 }
 
 func mustCredentialSessionID(t testing.TB, value string) SessionID {
