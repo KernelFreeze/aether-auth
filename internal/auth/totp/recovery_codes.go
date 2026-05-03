@@ -176,6 +176,7 @@ func (s *Service) VerifyRecoveryCode(ctx context.Context, req VerifyRecoveryCode
 		AccountID:    req.AccountID,
 		CredentialID: credential.ID,
 		Factor:       account.FactorKindRecoveryCode,
+		RequestID:    req.RequestID,
 		IP:           req.IP,
 		UserAgent:    req.UserAgent,
 		OccurredAt:   now,
@@ -260,6 +261,7 @@ type VerifyRecoveryCodeRequest struct {
 	AccountID        account.AccountID
 	CredentialID     account.CredentialID
 	Code             string
+	RequestID        string
 	IP               netip.Addr
 	UserAgent        string
 	Endpoint         string

@@ -39,6 +39,7 @@ type Deps struct {
 	Hasher        auth.PasswordHasher
 	Box           auth.SecretBox
 	Attempts      AttemptStore
+	Audit         auth.AuditWriter
 	Clock         auth.Clock
 	Random        io.Reader
 	Config        Config
@@ -51,6 +52,7 @@ type Service struct {
 	hasher        auth.PasswordHasher
 	box           auth.SecretBox
 	attempts      AttemptStore
+	audit         auth.AuditWriter
 	clock         auth.Clock
 	random        io.Reader
 	config        Config
@@ -66,6 +68,7 @@ func New(deps Deps) *Service {
 		hasher:        deps.Hasher,
 		box:           deps.Box,
 		attempts:      deps.Attempts,
+		audit:         deps.Audit,
 		clock:         deps.Clock,
 		random:        deps.Random,
 		config:        deps.Config,
@@ -237,6 +240,7 @@ func (s *Service) VerifyTOTP(ctx context.Context, req VerifyTOTPRequest) (auth.F
 			AccountID:    req.AccountID,
 			CredentialID: credential.ID,
 			Factor:       account.FactorKindTOTP,
+			RequestID:    req.RequestID,
 			IP:           req.IP,
 			UserAgent:    req.UserAgent,
 			OccurredAt:   now,
@@ -344,20 +348,59 @@ func (s *Service) openSecret(ctx context.Context, credential auth.CredentialSnap
 }
 
 func (s *Service) recordFailure(ctx context.Context, failure AttemptFailure) error {
-	if s.attempts == nil {
-		return auth.ErrInvalidCredentials
-	}
 	if failure.OccurredAt.IsZero() {
 		failure.OccurredAt = s.now()
 	}
-	result, err := s.attempts.RecordFailure(ctx, failure)
-	if err != nil {
+	var result AttemptResult
+	if s.attempts != nil {
+		var err error
+		result, err = s.attempts.RecordFailure(ctx, failure)
+		if err != nil {
+			return err
+		}
+	}
+	locked := !result.LockedUntil.IsZero() && result.LockedUntil.After(failure.OccurredAt)
+	if err := s.writeFailureAudit(ctx, failure, locked); err != nil {
 		return err
 	}
-	if !result.LockedUntil.IsZero() && result.LockedUntil.After(failure.OccurredAt) {
+	if locked {
 		return auth.ErrLockedAccount
 	}
 	return auth.ErrInvalidCredentials
+}
+
+func (s *Service) writeFailureAudit(ctx context.Context, failure AttemptFailure, locked bool) error {
+	if s.audit == nil {
+		return nil
+	}
+	outcome := "invalid"
+	if locked {
+		outcome = "locked"
+	}
+	attributes := map[string]string{
+		"factor":  failure.Factor.String(),
+		"outcome": outcome,
+	}
+	if endpoint := strings.TrimSpace(failure.Endpoint); endpoint != "" {
+		attributes["endpoint"] = endpoint
+	}
+	return s.audit.WriteAuditEvent(ctx, auth.AuditEvent{
+		Type:         auth.AuditEventMFAFailed,
+		AccountID:    failure.AccountID,
+		CredentialID: failure.CredentialID,
+		RequestID:    failure.RequestID,
+		IP:           auditIP(failure.IP),
+		UserAgent:    failure.UserAgent,
+		OccurredAt:   failure.OccurredAt,
+		Attributes:   attributes,
+	})
+}
+
+func auditIP(ip netip.Addr) string {
+	if !ip.IsValid() {
+		return ""
+	}
+	return ip.String()
 }
 
 func (s *Service) recordSuccess(ctx context.Context, success AttemptSuccess) error {

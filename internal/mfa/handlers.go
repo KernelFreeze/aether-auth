@@ -201,6 +201,7 @@ func (m *Module) verifyFactor(c *gin.Context, partial auth.PartialSession, body 
 			AccountID:        partial.AccountID,
 			CredentialID:     body.credentialID,
 			Code:             body.Code,
+			RequestID:        middleware.RequestID(c),
 			IP:               ip,
 			UserAgent:        c.Request.UserAgent(),
 			Endpoint:         c.FullPath(),

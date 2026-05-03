@@ -394,11 +394,11 @@ tokens and factor state.
   - [x] `POST /auth/mfa/verify`.
   - [x] TOTP enrollment, confirmation, disable, and recovery-code regenerate
     endpoints under account settings.
-- [ ] Add tests:
+- [x] Add tests:
   - [x] TOTP clock-window behavior.
   - [x] Recovery code single-use behavior.
   - [x] Partial session cannot be upgraded without required factors.
-  - [ ] MFA failures are audited without logging raw codes.
+  - [x] MFA failures are audited without logging raw codes.
 
 Exit criteria:
 

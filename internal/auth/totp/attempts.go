@@ -15,6 +15,7 @@ type AttemptFailure struct {
 	AccountID    account.AccountID
 	CredentialID account.CredentialID
 	Factor       account.FactorKind
+	RequestID    string
 	IP           netip.Addr
 	UserAgent    string
 	OccurredAt   time.Time

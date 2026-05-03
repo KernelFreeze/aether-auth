@@ -3,6 +3,7 @@ package totp
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"errors"
 	"io"
 	"net/netip"
@@ -124,11 +125,76 @@ func TestVerifyTOTPLockoutOnRepeatedFailure(t *testing.T) {
 
 	_, _, err = service.VerifyTOTP(context.Background(), VerifyTOTPRequest{
 		AccountID: accountID,
-		Code:      "000000",
+		Code:      "654321",
 		IP:        netip.MustParseAddr("203.0.113.30"),
 	})
 	if !errors.Is(err, auth.ErrLockedAccount) {
 		t.Fatalf("verify error = %v, want locked account", err)
+	}
+}
+
+func TestVerifyTOTPFailureWritesAuditWithoutCode(t *testing.T) {
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000002007")
+	credentialID := mustCredentialID(t, "018f1f74-10a1-7000-9000-000000002008")
+	now := time.Date(2026, 5, 3, 12, 0, 0, 0, time.UTC)
+	audit := &fakeAuditWriter{}
+	repo := &fakeCredentialRepository{}
+	service := New(Deps{
+		Credentials: repo,
+		Box:         fakeSecretBox{},
+		Attempts:    &fakeAttemptStore{},
+		Audit:       audit,
+		Clock:       fakeClock{now: now},
+	})
+	payload, err := service.sealSecret(context.Background(), accountID, storedTOTPPayload{
+		Secret:        "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+		Algorithm:     algorithmSHA1,
+		Digits:        defaultDigits,
+		PeriodSeconds: int(defaultPeriod / time.Second),
+	})
+	if err != nil {
+		t.Fatalf("seal secret: %v", err)
+	}
+	repo.lookup = auth.CredentialSnapshot{
+		ID:               credentialID,
+		AccountID:        accountID,
+		Kind:             account.CredentialKindTOTP,
+		EncryptedPayload: payload,
+		Verified:         true,
+	}
+
+	_, _, err = service.VerifyTOTP(context.Background(), VerifyTOTPRequest{
+		AccountID: accountID,
+		Code:      "000000",
+		RequestID: "req-mfa-fail",
+		IP:        netip.MustParseAddr("203.0.113.31"),
+		UserAgent: "mfa-test-agent",
+		Endpoint:  "/auth/mfa/verify",
+	})
+	if !errors.Is(err, auth.ErrInvalidCredentials) {
+		t.Fatalf("verify error = %v, want invalid credentials", err)
+	}
+	if len(audit.events) != 1 {
+		t.Fatalf("audit events length = %d, want 1", len(audit.events))
+	}
+	event := audit.events[0]
+	if event.Type != auth.AuditEventMFAFailed || event.AccountID != accountID || event.CredentialID != credentialID {
+		t.Fatalf("audit event = %#v", event)
+	}
+	if event.RequestID != "req-mfa-fail" || event.IP != "203.0.113.31" || event.UserAgent != "mfa-test-agent" {
+		t.Fatalf("audit request context = %#v", event)
+	}
+	if event.Attributes["factor"] != account.FactorKindTOTP.String() || event.Attributes["outcome"] != "invalid" || event.Attributes["endpoint"] != "/auth/mfa/verify" {
+		t.Fatalf("audit attributes = %#v", event.Attributes)
+	}
+	encoded, err := json.Marshal(event)
+	if err != nil {
+		t.Fatalf("marshal audit event: %v", err)
+	}
+	for _, forbidden := range []string{"654321", "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ"} {
+		if strings.Contains(string(encoded), forbidden) {
+			t.Fatalf("audit event leaked %q: %s", forbidden, encoded)
+		}
 	}
 }
 
@@ -324,6 +390,15 @@ func (s *fakeAttemptStore) RecordFailure(_ context.Context, failure AttemptFailu
 
 func (s *fakeAttemptStore) RecordSuccess(_ context.Context, success AttemptSuccess) error {
 	s.success = success
+	return nil
+}
+
+type fakeAuditWriter struct {
+	events []auth.AuditEvent
+}
+
+func (w *fakeAuditWriter) WriteAuditEvent(_ context.Context, event auth.AuditEvent) error {
+	w.events = append(w.events, event)
 	return nil
 }
 

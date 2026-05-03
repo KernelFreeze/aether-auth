@@ -274,6 +274,7 @@ func newTOTPService(ctx context.Context, cfg *config.Config, sec secrets.Provide
 		Hasher:        password.NewArgon2idHasher(cfg.Argon2, pepper, rand.Reader),
 		Box:           box,
 		Attempts:      totp.NewSQLAttemptStore(pool, totp.LockoutPolicyFromConfig(cfg.Lockout)),
+		Audit:         auth.NewSQLAuditWriter(queries),
 		Random:        rand.Reader,
 		Config: totp.Config{
 			Issuer: cfg.Issuer.URL,
