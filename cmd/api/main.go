@@ -133,6 +133,7 @@ func run() error {
 				Credentials: account.NewCredentialService(account.CredentialDeps{
 					Store: account.NewSQLCredentialStore(queries),
 				}),
+				Sessions: sessionIssuer,
 			}),
 			Auth: auth.New(auth.Deps{
 				Registration: account.NewRegistrationService(account.RegistrationDeps{

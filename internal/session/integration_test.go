@@ -144,6 +144,7 @@ func TestSQLStoreSessionRevocationIntegration(t *testing.T) {
 	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000971")
 	firstSessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000972")
 	secondSessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000973")
+	partialSessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000976")
 	firstRefreshID := uuid.MustParse("018f1f74-10a1-7000-9000-000000000974")
 	secondRefreshID := uuid.MustParse("018f1f74-10a1-7000-9000-000000000975")
 	firstHash := sha256.Sum256(bytes.Repeat([]byte{0x81}, randomTokenBytes))
@@ -167,14 +168,23 @@ func TestSQLStoreSessionRevocationIntegration(t *testing.T) {
 		{sessionID: firstSessionID, refreshID: firstRefreshID, tokenID: "first-access-jti", hash: firstHash[:]},
 		{sessionID: secondSessionID, refreshID: secondRefreshID, tokenID: "second-access-jti", hash: secondHash[:]},
 	} {
+		fingerprintID := "revocation-user-agent-" + seed.tokenID
 		if err := store.CreateFullSession(ctx, FullSessionRecord{
 			Session: SessionRecord{
-				ID:        seed.sessionID,
-				AccountID: accountID,
-				Kind:      sessionKindFull,
-				Status:    sessionStatusActive,
-				TokenID:   seed.tokenID,
-				ExpiresAt: now.Add(90 * 24 * time.Hour),
+				ID:          seed.sessionID,
+				AccountID:   accountID,
+				Kind:        sessionKindFull,
+				Status:      sessionStatusActive,
+				TokenID:     seed.tokenID,
+				UserAgentID: fingerprintID,
+				IP:          "203.0.113.10",
+				ExpiresAt:   now.Add(90 * 24 * time.Hour),
+			},
+			UserAgent: UserAgentRecord{
+				FingerprintID: fingerprintID,
+				IP:            "203.0.113.10",
+				Description:   "Revocation Test Browser",
+				Headers:       []byte(`{}`),
 			},
 			RefreshToken: RefreshTokenRecord{
 				ID:                seed.refreshID,
@@ -187,6 +197,28 @@ func TestSQLStoreSessionRevocationIntegration(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("create seeded session: %v", err)
 		}
+	}
+	if err := store.CreatePartialSession(ctx, PartialSessionRecord{
+		Session: SessionRecord{
+			ID:        partialSessionID,
+			AccountID: accountID,
+			Kind:      sessionKindPartial,
+			Status:    sessionStatusActive,
+			ExpiresAt: now.Add(time.Minute),
+		},
+	}); err != nil {
+		t.Fatalf("create partial session: %v", err)
+	}
+
+	active, err := store.ListActiveSessions(ctx, accountID, now)
+	if err != nil {
+		t.Fatalf("list active sessions: %v", err)
+	}
+	if len(active) != 2 {
+		t.Fatalf("active full sessions length = %d, want 2: %#v", len(active), active)
+	}
+	if active[0].UserAgent != "Revocation Test Browser" || active[0].IP != "203.0.113.10" {
+		t.Fatalf("active session device view = %#v", active[0])
 	}
 
 	revoked, err := store.RevokeSession(ctx, SessionRevocation{

@@ -12,6 +12,7 @@ import (
 type Deps struct {
 	Profiles    ProfileManager
 	Credentials CredentialManager
+	Sessions    AccountSessionManager
 }
 
 // ProfileManager is the profile service surface used by HTTP handlers.
@@ -26,10 +27,17 @@ type CredentialManager interface {
 	RemoveCredential(ctx context.Context, req RemoveCredentialRequest) (Credential, error)
 }
 
+// AccountSessionManager is the account-owned session surface used by HTTP handlers.
+type AccountSessionManager interface {
+	ListAccountSessions(context.Context, AccountID) ([]AccountSession, error)
+	RevokeAccountSession(context.Context, AccountID, SessionID) error
+}
+
 // Module owns account and credential HTTP handlers.
 type Module struct {
 	profiles    profileManager
 	credentials credentialManager
+	sessions    accountSessionManager
 }
 
 type profileManager interface {
@@ -42,6 +50,11 @@ type credentialManager interface {
 	RemoveCredential(ctx context.Context, req RemoveCredentialRequest) (Credential, error)
 }
 
+type accountSessionManager interface {
+	ListAccountSessions(context.Context, AccountID) ([]AccountSession, error)
+	RevokeAccountSession(context.Context, AccountID, SessionID) error
+}
+
 var _ httpapi.Module = (*Module)(nil)
 
 // New builds the account feature module.
@@ -49,6 +62,7 @@ func New(deps Deps) *Module {
 	return &Module{
 		profiles:    deps.Profiles,
 		credentials: deps.Credentials,
+		sessions:    deps.Sessions,
 	}
 }
 
@@ -65,4 +79,6 @@ func (m *Module) RegisterRoutes(r gin.IRouter, mw httpapi.Middlewares) {
 	protected.PATCH("/profile", m.handleUpdateProfile)
 	protected.GET("/credentials", m.handleListCredentials)
 	protected.DELETE("/credentials/:credential_id", m.handleRemoveCredential)
+	protected.GET("/sessions", m.handleListSessions)
+	protected.DELETE("/sessions/:id", m.handleRevokeSession)
 }

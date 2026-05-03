@@ -8,6 +8,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/netip"
@@ -68,6 +69,7 @@ type Store interface {
 	CreateFullSession(context.Context, FullSessionRecord) error
 	CreatePartialSession(context.Context, PartialSessionRecord) error
 	GetActiveSession(context.Context, account.SessionID, time.Time) (SessionRecord, error)
+	ListActiveSessions(context.Context, account.AccountID, time.Time) ([]AccountSessionRecord, error)
 	RevokeAccountSessions(context.Context, AccountSessionsRevocation) ([]SessionRecord, error)
 	RevokeSession(context.Context, SessionRevocation) (SessionRecord, error)
 	RotateRefreshToken(context.Context, RefreshTokenRotation) (RefreshTokenRotationResult, error)
@@ -117,6 +119,17 @@ type SessionRecord struct {
 	UserAgentID string
 	IP          string
 	ExpiresAt   time.Time
+}
+
+// AccountSessionRecord is the store view used for account-owned session APIs.
+type AccountSessionRecord struct {
+	ID        account.SessionID
+	AccountID account.AccountID
+	ClientID  account.ClientID
+	IP        string
+	UserAgent string
+	CreatedAt time.Time
+	ExpiresAt time.Time
 }
 
 // UserAgentRecord contains normalized device metadata for a session.
@@ -518,6 +531,51 @@ func (s *Service) RefreshSession(ctx context.Context, req RefreshSessionRequest)
 	}, nil
 }
 
+// ListAccountSessions returns the authenticated account's active full sessions.
+func (s *Service) ListAccountSessions(ctx context.Context, accountID account.AccountID) ([]account.AccountSession, error) {
+	if err := s.storeReady(); err != nil {
+		return nil, err
+	}
+	if accountID.IsZero() {
+		return nil, account.ErrInvalidSession
+	}
+	records, err := s.store.ListActiveSessions(ctx, accountID, s.now(time.Time{}))
+	if err != nil {
+		return nil, err
+	}
+	sessions := make([]account.AccountSession, 0, len(records))
+	for _, record := range records {
+		sessions = append(sessions, account.AccountSession{
+			ID:        record.ID,
+			AccountID: record.AccountID,
+			ClientID:  record.ClientID,
+			IP:        record.IP,
+			UserAgent: record.UserAgent,
+			CreatedAt: record.CreatedAt,
+			ExpiresAt: record.ExpiresAt,
+		})
+	}
+	return sessions, nil
+}
+
+// RevokeAccountSession revokes one active session owned by the authenticated account.
+func (s *Service) RevokeAccountSession(ctx context.Context, accountID account.AccountID, sessionID account.SessionID) error {
+	if accountID.IsZero() || sessionID.IsZero() {
+		return account.ErrInvalidSession
+	}
+	_, err := s.RevokeSession(ctx, RevokeSessionRequest{
+		SessionID: sessionID,
+		AccountID: accountID,
+	})
+	if errors.Is(err, auth.ErrInvalidCredentials) {
+		return account.ErrSessionNotFound
+	}
+	if errors.Is(err, auth.ErrMalformedInput) {
+		return account.ErrInvalidSession
+	}
+	return err
+}
+
 // RevokeSession revokes one session owned by account and caches its current
 // access-token ID so middleware can reject it quickly.
 func (s *Service) RevokeSession(ctx context.Context, req RevokeSessionRequest) (RevokeSessionResult, error) {
@@ -606,6 +664,16 @@ func (s *Service) ready() error {
 	}
 	if s.ids == nil {
 		return auth.NewServiceError(auth.ErrorKindInternal, "session id generator is nil", nil)
+	}
+	return nil
+}
+
+func (s *Service) storeReady() error {
+	if s == nil {
+		return auth.NewServiceError(auth.ErrorKindInternal, "session service is nil", nil)
+	}
+	if s.store == nil {
+		return auth.NewServiceError(auth.ErrorKindInternal, "session store is nil", nil)
 	}
 	return nil
 }

@@ -343,14 +343,15 @@ Exit criteria:
   - [x] Password-change revocation.
   - [x] Admin revocation hook for later organization work.
   - [x] Redis revocation set keyed by access-token `jti`.
-- [ ] Add account session APIs:
-  - [ ] `GET /account/sessions`.
-  - [ ] `DELETE /account/sessions/{id}`.
-- [ ] Add tests:
+- [x] Add account session APIs:
+  - [x] `GET /account/sessions`.
+  - [x] `DELETE /account/sessions/{id}`.
+- [x] Add tests:
   - [x] Access token claims and footers.
   - [x] Refresh rotation and reuse detection.
   - [x] Revocation cache TTL.
   - [x] Partial token cannot authorize normal APIs.
+  - [x] Account session list and revocation APIs.
 
 Exit criteria:
 

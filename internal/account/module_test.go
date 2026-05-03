@@ -129,6 +129,86 @@ func TestAccountModuleRemoveCredentialProtectsLastCredential(t *testing.T) {
 	}
 }
 
+func TestAccountModuleListsSessionsWithoutTokenMaterial(t *testing.T) {
+	accountID := mustCredentialAccountID(t, "018f1f74-10a1-7000-9000-000000000508")
+	currentID := mustCredentialSessionID(t, "018f1f74-10a1-7000-9000-000000000509")
+	otherID := mustCredentialSessionID(t, "018f1f74-10a1-7000-9000-000000000510")
+	now := time.Date(2026, 5, 3, 10, 0, 0, 0, time.UTC)
+	sessions := &fakeSessionManager{
+		sessions: []AccountSession{
+			{
+				ID:        currentID,
+				AccountID: accountID,
+				IP:        "203.0.113.10",
+				UserAgent: "Firefox on Fedora",
+				CreatedAt: now.Add(-time.Hour),
+				ExpiresAt: now.Add(90 * 24 * time.Hour),
+			},
+			{
+				ID:        otherID,
+				AccountID: accountID,
+				IP:        "203.0.113.11",
+				UserAgent: "Mobile",
+				CreatedAt: now.Add(-2 * time.Hour),
+				ExpiresAt: now.Add(30 * 24 * time.Hour),
+			},
+		},
+	}
+	router := accountTestRouter(t, New(Deps{Sessions: sessions}), authenticatedAsSession(accountID, currentID, time.Time{}))
+
+	rec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodGet, "/account/sessions", nil))
+	if rec.Code != http.StatusOK {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusOK, rec.Body.String())
+	}
+	body := rec.Body.String()
+	for _, forbidden := range []string{"access", "refresh", "token", "jti"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("session response leaked %q: %s", forbidden, body)
+		}
+	}
+	var decoded accountSessionsResponse
+	testutil.DecodeJSON(t, strings.NewReader(body), &decoded)
+	if len(decoded.Sessions) != 2 || !decoded.Sessions[0].Current || decoded.Sessions[1].Current {
+		t.Fatalf("sessions response = %#v", decoded)
+	}
+	if sessions.listAccountID != accountID {
+		t.Fatalf("list account id = %s, want %s", sessions.listAccountID, accountID)
+	}
+}
+
+func TestAccountModuleRevokesAuthenticatedAccountSession(t *testing.T) {
+	accountID := mustCredentialAccountID(t, "018f1f74-10a1-7000-9000-000000000511")
+	currentID := mustCredentialSessionID(t, "018f1f74-10a1-7000-9000-000000000512")
+	revokedID := mustCredentialSessionID(t, "018f1f74-10a1-7000-9000-000000000513")
+	sessions := &fakeSessionManager{}
+	router := accountTestRouter(t, New(Deps{Sessions: sessions}), authenticatedAsSession(accountID, currentID, time.Time{}))
+
+	rec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodDelete, "/account/sessions/"+revokedID.String(), nil))
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusNoContent, rec.Body.String())
+	}
+	if sessions.revokeAccountID != accountID || sessions.revokeSessionID != revokedID {
+		t.Fatalf("revoke request = account %s session %s", sessions.revokeAccountID, sessions.revokeSessionID)
+	}
+}
+
+func TestAccountModuleRevokesMissingSessionAsNotFound(t *testing.T) {
+	accountID := mustCredentialAccountID(t, "018f1f74-10a1-7000-9000-000000000514")
+	sessionID := mustCredentialSessionID(t, "018f1f74-10a1-7000-9000-000000000515")
+	sessions := &fakeSessionManager{revokeErr: ErrSessionNotFound}
+	router := accountTestRouter(t, New(Deps{Sessions: sessions}), authenticatedAs(accountID, time.Time{}))
+
+	rec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodDelete, "/account/sessions/"+sessionID.String(), nil))
+	if rec.Code != http.StatusNotFound {
+		t.Fatalf("status = %d, want %d: %s", rec.Code, http.StatusNotFound, rec.Body.String())
+	}
+	var body map[string]any
+	testutil.DecodeJSON(t, rec.Body, &body)
+	if body["code"] != "session_not_found" {
+		t.Fatalf("problem body = %#v", body)
+	}
+}
+
 func TestAccountModuleRequiresAuthentication(t *testing.T) {
 	router := accountTestRouter(t, New(Deps{Profiles: &fakeProfileManager{}}), func(c *gin.Context) {
 		c.Next()
@@ -150,13 +230,43 @@ func accountTestRouter(t testing.TB, module *Module, auth gin.HandlerFunc) *gin.
 }
 
 func authenticatedAs(accountID AccountID, reauthenticatedAt time.Time) gin.HandlerFunc {
+	return authenticatedAsSession(accountID, SessionID{}, reauthenticatedAt)
+}
+
+func authenticatedAsSession(accountID AccountID, sessionID SessionID, reauthenticatedAt time.Time) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authctx.SetAccountID(c, accountID.String())
+		if !sessionID.IsZero() {
+			authctx.SetSessionID(c, sessionID.String())
+		}
 		if !reauthenticatedAt.IsZero() {
 			authctx.SetReauthenticatedAt(c, reauthenticatedAt)
 		}
 		c.Next()
 	}
+}
+
+type fakeSessionManager struct {
+	sessions        []AccountSession
+	listAccountID   AccountID
+	revokeAccountID AccountID
+	revokeSessionID SessionID
+	listErr         error
+	revokeErr       error
+}
+
+func (m *fakeSessionManager) ListAccountSessions(_ context.Context, accountID AccountID) ([]AccountSession, error) {
+	m.listAccountID = accountID
+	if m.listErr != nil {
+		return nil, m.listErr
+	}
+	return append([]AccountSession(nil), m.sessions...), nil
+}
+
+func (m *fakeSessionManager) RevokeAccountSession(_ context.Context, accountID AccountID, sessionID SessionID) error {
+	m.revokeAccountID = accountID
+	m.revokeSessionID = sessionID
+	return m.revokeErr
 }
 
 type fakeProfileManager struct {
@@ -203,4 +313,13 @@ func (m *fakeCredentialManager) RemoveCredential(_ context.Context, req RemoveCr
 		return Credential{}, m.removeErr
 	}
 	return Credential{ID: req.CredentialID, AccountID: req.AccountID}, nil
+}
+
+func mustCredentialSessionID(t testing.TB, value string) SessionID {
+	t.Helper()
+	id, err := ParseSessionID(value)
+	if err != nil {
+		t.Fatalf("parse session id: %v", err)
+	}
+	return id
 }

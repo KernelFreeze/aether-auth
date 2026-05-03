@@ -42,6 +42,7 @@ type Querier interface {
 	GetPasswordResetTargetByUsername(ctx context.Context, usernameNormalized string) (GetPasswordResetTargetByUsernameRow, error)
 	GetRefreshTokenByHash(ctx context.Context, tokenHash []byte) (RefreshToken, error)
 	GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, error)
+	ListActiveAccountSessions(ctx context.Context, arg ListActiveAccountSessionsParams) ([]ListActiveAccountSessionsRow, error)
 	ListActiveSessionsByAccount(ctx context.Context, arg ListActiveSessionsByAccountParams) ([]Session, error)
 	ListCredentialsByAccount(ctx context.Context, accountID pgtype.UUID) ([]Credential, error)
 	ListCredentialsByAccountAndKind(ctx context.Context, arg ListCredentialsByAccountAndKindParams) ([]Credential, error)

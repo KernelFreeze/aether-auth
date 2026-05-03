@@ -108,6 +108,51 @@ func (m *Module) handleRemoveCredential(c *gin.Context) {
 	c.Status(http.StatusNoContent)
 }
 
+func (m *Module) handleListSessions(c *gin.Context) {
+	if m.sessions == nil {
+		writeAccountProblem(c, http.StatusNotImplemented, "sessions_not_configured", "Sessions not configured", "Session routes are not wired.", nil)
+		return
+	}
+	accountID, ok := authenticatedAccountID(c)
+	if !ok {
+		return
+	}
+
+	sessions, err := m.sessions.ListAccountSessions(c.Request.Context(), accountID)
+	if err != nil {
+		writeAccountError(c, err)
+		return
+	}
+	currentID, _ := authenticatedSessionID(c)
+	response := accountSessionsResponse{Sessions: make([]accountSessionResponse, 0, len(sessions))}
+	for _, session := range sessions {
+		response.Sessions = append(response.Sessions, accountSessionResponseFrom(session, currentID))
+	}
+	c.JSON(http.StatusOK, response)
+}
+
+func (m *Module) handleRevokeSession(c *gin.Context) {
+	if m.sessions == nil {
+		writeAccountProblem(c, http.StatusNotImplemented, "sessions_not_configured", "Sessions not configured", "Session routes are not wired.", nil)
+		return
+	}
+	accountID, ok := authenticatedAccountID(c)
+	if !ok {
+		return
+	}
+	sessionID, err := ParseSessionID(c.Param("id"))
+	if err != nil {
+		writeAccountProblem(c, http.StatusBadRequest, "invalid_session_id", "Invalid session ID", "The session ID is malformed.", nil)
+		return
+	}
+
+	if err := m.sessions.RevokeAccountSession(c.Request.Context(), accountID, sessionID); err != nil {
+		writeAccountError(c, err)
+		return
+	}
+	c.Status(http.StatusNoContent)
+}
+
 type profileResponse struct {
 	ID          string          `json:"id"`
 	Username    string          `json:"username"`
@@ -163,6 +208,35 @@ func credentialResponseFrom(credential Credential) credentialResponse {
 	return response
 }
 
+type accountSessionsResponse struct {
+	Sessions []accountSessionResponse `json:"sessions"`
+}
+
+type accountSessionResponse struct {
+	ID        string    `json:"id"`
+	ClientID  string    `json:"client_id,omitempty"`
+	IP        string    `json:"ip,omitempty"`
+	UserAgent string    `json:"user_agent,omitempty"`
+	Current   bool      `json:"current"`
+	CreatedAt time.Time `json:"created_at"`
+	ExpiresAt time.Time `json:"expires_at"`
+}
+
+func accountSessionResponseFrom(session AccountSession, currentID SessionID) accountSessionResponse {
+	response := accountSessionResponse{
+		ID:        session.ID.String(),
+		IP:        session.IP,
+		UserAgent: session.UserAgent,
+		Current:   !currentID.IsZero() && session.ID == currentID,
+		CreatedAt: NormalizeTimestamp(session.CreatedAt),
+		ExpiresAt: NormalizeTimestamp(session.ExpiresAt),
+	}
+	if !session.ClientID.IsZero() {
+		response.ClientID = session.ClientID.String()
+	}
+	return response
+}
+
 func authenticatedAccountID(c *gin.Context) (AccountID, bool) {
 	value, ok := authctx.AccountID(c)
 	if !ok {
@@ -175,6 +249,18 @@ func authenticatedAccountID(c *gin.Context) (AccountID, bool) {
 		return AccountID{}, false
 	}
 	return accountID, true
+}
+
+func authenticatedSessionID(c *gin.Context) (SessionID, bool) {
+	value, ok := authctx.SessionID(c)
+	if !ok {
+		return SessionID{}, false
+	}
+	sessionID, err := ParseSessionID(value)
+	if err != nil {
+		return SessionID{}, false
+	}
+	return sessionID, true
 }
 
 func decodeProfileUpdate(c *gin.Context, accountID AccountID) (UpdateProfileRequest, error) {
@@ -230,6 +316,10 @@ func writeAccountError(c *gin.Context, err error) {
 		writeAccountProblem(c, http.StatusConflict, "last_credential", "Last credential", "At least one active credential must remain on the account.", nil)
 	case errors.Is(err, ErrCredentialReauthenticationRequired):
 		writeAccountProblem(c, http.StatusForbidden, "reauthentication_required", "Reauthentication required", "Recent primary authentication is required for this credential change.", nil)
+	case errors.Is(err, ErrInvalidSession):
+		writeAccountProblem(c, http.StatusBadRequest, "invalid_session", "Invalid session", "The session request is invalid.", nil)
+	case errors.Is(err, ErrSessionNotFound):
+		writeAccountProblem(c, http.StatusNotFound, "session_not_found", "Session not found", "The session was not found.", nil)
 	default:
 		writeAccountProblem(c, http.StatusInternalServerError, "internal_error", "Internal error", "The request could not be completed.", nil)
 	}
@@ -263,8 +353,12 @@ func accountErrorID(code string) string {
 		return "ACCOUNT-0006"
 	case "reauthentication_required":
 		return "ACCOUNT-0007"
-	case "authentication_not_configured", "profile_not_configured", "credentials_not_configured":
+	case "authentication_not_configured", "profile_not_configured", "credentials_not_configured", "sessions_not_configured":
 		return "ACCOUNT-0008"
+	case "invalid_session", "invalid_session_id":
+		return "ACCOUNT-0010"
+	case "session_not_found":
+		return "ACCOUNT-0011"
 	default:
 		return "ACCOUNT-0009"
 	}

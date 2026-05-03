@@ -274,6 +274,67 @@ func (q *Queries) GetSessionByID(ctx context.Context, id pgtype.UUID) (Session, 
 	return i, err
 }
 
+const listActiveAccountSessions = `-- name: ListActiveAccountSessions :many
+SELECT
+    s.id,
+    s.account_id,
+    s.client_id,
+    s.ip,
+    COALESCE(ua.description, '')::text AS user_agent,
+    s.created_at,
+    s.expires_at
+FROM sessions AS s
+LEFT JOIN session_user_agents AS ua ON ua.fingerprint_id = s.user_agent_id
+WHERE s.account_id = $1
+  AND s.kind = 'full'
+  AND s.status = 'active'
+  AND s.expires_at > $2
+ORDER BY s.created_at DESC
+`
+
+type ListActiveAccountSessionsParams struct {
+	AccountID pgtype.UUID        `json:"account_id"`
+	ActiveAt  pgtype.Timestamptz `json:"active_at"`
+}
+
+type ListActiveAccountSessionsRow struct {
+	ID        pgtype.UUID        `json:"id"`
+	AccountID pgtype.UUID        `json:"account_id"`
+	ClientID  pgtype.UUID        `json:"client_id"`
+	Ip        *netip.Addr        `json:"ip"`
+	UserAgent string             `json:"user_agent"`
+	CreatedAt pgtype.Timestamptz `json:"created_at"`
+	ExpiresAt pgtype.Timestamptz `json:"expires_at"`
+}
+
+func (q *Queries) ListActiveAccountSessions(ctx context.Context, arg ListActiveAccountSessionsParams) ([]ListActiveAccountSessionsRow, error) {
+	rows, err := q.db.Query(ctx, listActiveAccountSessions, arg.AccountID, arg.ActiveAt)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	items := []ListActiveAccountSessionsRow{}
+	for rows.Next() {
+		var i ListActiveAccountSessionsRow
+		if err := rows.Scan(
+			&i.ID,
+			&i.AccountID,
+			&i.ClientID,
+			&i.Ip,
+			&i.UserAgent,
+			&i.CreatedAt,
+			&i.ExpiresAt,
+		); err != nil {
+			return nil, err
+		}
+		items = append(items, i)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return items, nil
+}
+
 const listActiveSessionsByAccount = `-- name: ListActiveSessionsByAccount :many
 SELECT id, account_id, client_id, kind, status, token_id, user_agent_id, ip, expires_at, revoked_at, created_at, updated_at
 FROM sessions

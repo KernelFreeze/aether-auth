@@ -68,6 +68,23 @@ WHERE account_id = sqlc.arg(account_id)
   AND expires_at > sqlc.arg(active_at)
 ORDER BY created_at DESC;
 
+-- name: ListActiveAccountSessions :many
+SELECT
+    s.id,
+    s.account_id,
+    s.client_id,
+    s.ip,
+    COALESCE(ua.description, '')::text AS user_agent,
+    s.created_at,
+    s.expires_at
+FROM sessions AS s
+LEFT JOIN session_user_agents AS ua ON ua.fingerprint_id = s.user_agent_id
+WHERE s.account_id = sqlc.arg(account_id)
+  AND s.kind = 'full'
+  AND s.status = 'active'
+  AND s.expires_at > sqlc.arg(active_at)
+ORDER BY s.created_at DESC;
+
 -- name: RevokeSession :one
 UPDATE sessions
 SET status = 'revoked',

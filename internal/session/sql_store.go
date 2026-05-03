@@ -120,6 +120,32 @@ func (s *SQLStore) GetActiveSession(ctx context.Context, sessionID account.Sessi
 	return sessionRecordFromSQL(row), nil
 }
 
+// ListActiveSessions loads active full sessions for the account self-service API.
+func (s *SQLStore) ListActiveSessions(ctx context.Context, accountID account.AccountID, activeAt time.Time) ([]AccountSessionRecord, error) {
+	if err := s.ready(); err != nil {
+		return nil, err
+	}
+	if accountID.IsZero() {
+		return nil, auth.NewServiceError(auth.ErrorKindMalformedInput, "account id is required", nil)
+	}
+	activeAt = account.NormalizeTimestamp(activeAt)
+	if activeAt.IsZero() {
+		activeAt = account.NormalizeTimestamp(time.Now())
+	}
+	rows, err := s.queries.ListActiveAccountSessions(ctx, sqlc.ListActiveAccountSessionsParams{
+		AccountID: accountIDToPG(accountID),
+		ActiveAt:  timeToTimestamptz(activeAt),
+	})
+	if err != nil {
+		return nil, fmt.Errorf("session: list active account sessions: %w", err)
+	}
+	records := make([]AccountSessionRecord, 0, len(rows))
+	for _, row := range rows {
+		records = append(records, accountSessionRecordFromSQL(row))
+	}
+	return records, nil
+}
+
 // RevokeSession revokes one active session and its refresh tokens. AccountID is
 // optional; when set, the session must belong to that account.
 func (s *SQLStore) RevokeSession(ctx context.Context, revocation SessionRevocation) (SessionRecord, error) {
@@ -512,6 +538,18 @@ func factorRecordsFromSQL(rows []sqlc.SessionFactor) []FactorRecord {
 		})
 	}
 	return records
+}
+
+func accountSessionRecordFromSQL(row sqlc.ListActiveAccountSessionsRow) AccountSessionRecord {
+	return AccountSessionRecord{
+		ID:        sessionIDFromPG(row.ID),
+		AccountID: accountIDFromPG(row.AccountID),
+		ClientID:  clientIDFromPG(row.ClientID),
+		IP:        addrPtrValue(row.Ip),
+		UserAgent: row.UserAgent,
+		CreatedAt: timestamptzToTime(row.CreatedAt),
+		ExpiresAt: timestamptzToTime(row.ExpiresAt),
+	}
 }
 
 func optionalAddr(value string) (*netip.Addr, error) {

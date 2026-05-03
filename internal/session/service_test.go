@@ -434,6 +434,56 @@ func TestServiceAdminRevokeSessionDoesNotRequireAccountScope(t *testing.T) {
 	}
 }
 
+func TestServiceListAccountSessionsReturnsPublicSessionViews(t *testing.T) {
+	now := time.Date(2026, 5, 3, 9, 30, 0, 0, time.UTC)
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000903")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000904")
+	store := &fakeStore{
+		activeSessions: []AccountSessionRecord{
+			{
+				ID:        sessionID,
+				AccountID: accountID,
+				IP:        "203.0.113.10",
+				UserAgent: "Firefox on Fedora",
+				CreatedAt: now.Add(-time.Hour),
+				ExpiresAt: now.Add(90 * 24 * time.Hour),
+			},
+		},
+	}
+	service := NewService(ServiceDeps{
+		Store: store,
+		Clock: testutil.NewFakeClock(now),
+	})
+
+	sessions, err := service.ListAccountSessions(context.Background(), accountID)
+	if err != nil {
+		t.Fatalf("list account sessions: %v", err)
+	}
+	if len(sessions) != 1 {
+		t.Fatalf("sessions length = %d, want 1", len(sessions))
+	}
+	if sessions[0].ID != sessionID || sessions[0].UserAgent != "Firefox on Fedora" || sessions[0].IP != "203.0.113.10" {
+		t.Fatalf("session view = %#v", sessions[0])
+	}
+	if store.listAccountID != accountID || store.listActiveAt != now {
+		t.Fatalf("list request = account %s activeAt %s", store.listAccountID, store.listActiveAt)
+	}
+}
+
+func TestServiceRevokeAccountSessionMapsMissingSession(t *testing.T) {
+	accountID := mustAccountID(t, "018f1f74-10a1-7000-9000-000000000905")
+	sessionID := mustSessionID(t, "018f1f74-10a1-7000-9000-000000000906")
+	service := NewService(ServiceDeps{
+		Store:       &fakeStore{},
+		Revocations: &fakeRevocationCache{},
+	})
+
+	err := service.RevokeAccountSession(context.Background(), accountID, sessionID)
+	if !errors.Is(err, account.ErrSessionNotFound) {
+		t.Fatalf("revoke account session error = %v, want ErrSessionNotFound", err)
+	}
+}
+
 func TestServiceIssueSessionValidatesRequiredDependencies(t *testing.T) {
 	service := NewService(ServiceDeps{})
 
@@ -462,9 +512,12 @@ type fakeStore struct {
 	rotation                RefreshTokenRotation
 	revocation              SessionRevocation
 	accountRevocation       AccountSessionsRevocation
+	listAccountID           account.AccountID
+	listActiveAt            time.Time
 	rotationResult          RefreshTokenRotationResult
 	revoked                 SessionRecord
 	accountRevoked          []SessionRecord
+	activeSessions          []AccountSessionRecord
 	rotationErr             error
 }
 
@@ -485,6 +538,12 @@ func (s *fakeStore) GetActiveSession(_ context.Context, sessionID account.Sessio
 		return s.revoked, nil
 	}
 	return SessionRecord{}, auth.ErrInvalidCredentials
+}
+
+func (s *fakeStore) ListActiveSessions(_ context.Context, accountID account.AccountID, activeAt time.Time) ([]AccountSessionRecord, error) {
+	s.listAccountID = accountID
+	s.listActiveAt = activeAt
+	return append([]AccountSessionRecord(nil), s.activeSessions...), nil
 }
 
 func (s *fakeStore) RevokeSession(_ context.Context, revocation SessionRevocation) (SessionRecord, error) {
