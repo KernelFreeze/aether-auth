@@ -14,3 +14,7 @@ Startup order:
 Create `local.env` from `local.env.example` and use throwaway values. Do not
 commit generated account names, emails, passwords, reset tokens, OAuth codes,
 or session tokens.
+
+Credential and session flows need `AUTHENTICATED_USERNAME` and
+`AUTHENTICATED_PASSWORD` for a throwaway account that already has a verified
+password credential. Keep that account local to the test stack.

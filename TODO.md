@@ -26,16 +26,16 @@ layer, not the fast `just test` unit gate.
     worker when async mail or cleanup behavior is under test.
   - [x] Keep generated account names, emails, passwords, reset tokens, OAuth
     codes, and session tokens out of source-controlled fixtures.
-- [ ] Stage 4 Hurl flow: account registration and credential API smoke tests.
+- [x] Stage 4 Hurl flow: account registration and credential API smoke tests.
   - [x] Register a valid account after the registration route is mounted.
   - [x] Assert the response shape never includes password hashes, encrypted
     credential payloads, reset tokens, or other secret material.
   - [x] Repeat registration with the same username and email and assert the
     public anti-enumeration contract.
-  - [ ] Exercise credential listing/removal only after Stage 6 can provide an
+  - [x] Exercise credential listing/removal only after Stage 6 can provide an
     authenticated session for protected account settings routes.
 - [ ] Stage 5 Hurl flow: password login public contract.
-  - [ ] Login with a registered account and assert the common session result
+  - [x] Login with a registered account and assert the common session result
     shape.
   - [ ] Compare wrong username, wrong password, inactive account, and lockout
     responses for the same public error contract.
