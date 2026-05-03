@@ -364,11 +364,11 @@ Exit criteria:
 This stage should start after sessions exist, because MFA uses partial session
 tokens and factor state.
 
-- [ ] Implement shared MFA policy:
-  - [ ] Account-level `mfa_enforced`.
-  - [ ] Organization-level `mfa_required` hook for later org stage.
-  - [ ] Required factors derived from account and org policy.
-  - [ ] Upgrade from partial session to full session only after required
+- [x] Implement shared MFA policy:
+  - [x] Account-level `mfa_enforced`.
+  - [x] Organization-level `mfa_required` hook for later org stage.
+  - [x] Required factors derived from account and org policy.
+  - [x] Upgrade from partial session to full session only after required
     factors are verified.
 - [ ] Reuse or port Zitadel's session factor model:
   - [ ] `backend/v3/domain/session_factor.go`.

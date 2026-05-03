@@ -7,16 +7,20 @@ import (
 )
 
 // Deps holds the dependencies for the MFA feature.
-type Deps struct{}
+type Deps struct {
+	Policy *PolicyService
+}
 
 // Module owns MFA policy and challenge HTTP handlers.
-type Module struct{}
+type Module struct {
+	policy *PolicyService
+}
 
 var _ httpapi.Module = (*Module)(nil)
 
 // New builds the MFA feature module.
 func New(deps Deps) *Module {
-	return &Module{}
+	return &Module{policy: deps.Policy}
 }
 
 // RegisterRoutes mounts MFA routes on the group assigned by httpapi.
