@@ -27,7 +27,7 @@ INSERT INTO login_attempts (
     sqlc.narg(ip),
     1,
     CASE
-        WHEN 1 >= sqlc.arg(max_failures)::integer THEN sqlc.arg(lock_until)
+        WHEN 1 >= sqlc.arg(max_failures)::integer THEN sqlc.arg(lock_until)::timestamptz
         ELSE NULL
     END,
     sqlc.arg(occurred_at)
@@ -38,7 +38,7 @@ SET account_id = COALESCE(EXCLUDED.account_id, login_attempts.account_id),
     ip = COALESCE(EXCLUDED.ip, login_attempts.ip),
     failed_count = login_attempts.failed_count + 1,
     locked_until = CASE
-        WHEN login_attempts.failed_count + 1 >= sqlc.arg(max_failures)::integer THEN sqlc.arg(lock_until)
+        WHEN login_attempts.failed_count + 1 >= sqlc.arg(max_failures)::integer THEN sqlc.arg(lock_until)::timestamptz
         ELSE login_attempts.locked_until
     END,
     last_failed_at = sqlc.arg(occurred_at)

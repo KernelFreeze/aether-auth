@@ -126,7 +126,7 @@ INSERT INTO login_attempts (
     $7,
     1,
     CASE
-        WHEN 1 >= $8::integer THEN $9
+        WHEN 1 >= $8::integer THEN $9::timestamptz
         ELSE NULL
     END,
     $10
@@ -137,7 +137,7 @@ SET account_id = COALESCE(EXCLUDED.account_id, login_attempts.account_id),
     ip = COALESCE(EXCLUDED.ip, login_attempts.ip),
     failed_count = login_attempts.failed_count + 1,
     locked_until = CASE
-        WHEN login_attempts.failed_count + 1 >= $8::integer THEN $9
+        WHEN login_attempts.failed_count + 1 >= $8::integer THEN $9::timestamptz
         ELSE login_attempts.locked_until
     END,
     last_failed_at = $10
@@ -153,7 +153,7 @@ type RecordLoginFailureParams struct {
 	UsernameNormalized *string            `json:"username_normalized"`
 	Ip                 *netip.Addr        `json:"ip"`
 	MaxFailures        int32              `json:"max_failures"`
-	LockUntil          interface{}        `json:"lock_until"`
+	LockUntil          pgtype.Timestamptz `json:"lock_until"`
 	OccurredAt         pgtype.Timestamptz `json:"occurred_at"`
 }
 

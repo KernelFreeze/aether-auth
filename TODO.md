@@ -375,21 +375,21 @@ tokens and factor state.
   - [x] `backend/v3/domain/session_check_user.go`.
   - [x] `backend/v3/domain/session_check_totp.go`.
   - [x] `backend/v3/domain/session_check_recovery_code.go`.
-- [ ] Implement `internal/auth/totp`:
-  - [ ] TOTP enrollment with QR provisioning URI.
-  - [ ] Secret encryption with AES-256-GCM.
-  - [ ] RFC 6238 verification with one-window tolerance.
-  - [ ] Recovery-code generation using unbiased CSPRNG selection.
-  - [ ] Recovery-code hashing and single-use consume.
-  - [ ] Lockout behavior for repeated MFA failures.
-- [ ] Reuse or port Zitadel helpers:
-  - [ ] `internal/domain/human_otp.go`.
-  - [ ] `internal/domain/human_recovery_codes.go`.
-  - [ ] `internal/command/user_human_otp.go`.
-  - [ ] `internal/command/user_human_recovery_codes.go`.
-- [ ] Do not copy:
-  - [ ] Zitadel AES-CFB helpers for encrypted-at-rest data.
-  - [ ] Biased random string generation for recovery codes.
+- [x] Implement `internal/auth/totp`:
+  - [x] TOTP enrollment with QR provisioning URI.
+  - [x] Secret encryption with AES-256-GCM.
+  - [x] RFC 6238 verification with one-window tolerance.
+  - [x] Recovery-code generation using unbiased CSPRNG selection.
+  - [x] Recovery-code hashing and single-use consume.
+  - [x] Lockout behavior for repeated MFA failures.
+- [x] Reuse or port Zitadel helpers:
+  - [x] `internal/domain/human_otp.go`.
+  - [x] `internal/domain/human_recovery_codes.go`.
+  - [x] `internal/command/user_human_otp.go`.
+  - [x] `internal/command/user_human_recovery_codes.go`.
+- [x] Do not copy:
+  - [x] Zitadel AES-CFB helpers for encrypted-at-rest data.
+  - [x] Biased random string generation for recovery codes.
 - [ ] Add routes:
   - [ ] `POST /auth/mfa/verify`.
   - [ ] TOTP enrollment, confirmation, disable, and recovery-code regenerate
