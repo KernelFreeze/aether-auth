@@ -412,17 +412,17 @@ This is a high-value reuse stage. Port the wrapper and test helper into
 `internal/auth/webauthn`, then adapt the storage to Aether credentials and
 session challenges.
 
-- [ ] Reuse or port:
-  - [ ] `internal/webauthn/webauthn.go`.
-  - [ ] `internal/webauthn/converter.go`.
-  - [ ] `internal/webauthn/client.go`.
-  - [ ] `backend/v3/domain/passkey.go`.
-  - [ ] `backend/v3/domain/session_challenge_passkey.go`.
-  - [ ] `backend/v3/domain/session_check_passkey.go`.
-- [ ] Replace Zitadel dependencies:
-  - [ ] Replace `domain.Human` with Aether account and credential models.
-  - [ ] Replace domain context and tracing with Aether logger/request context.
-  - [ ] Replace `zerrors` with Aether service errors.
+- [x] Reuse or port:
+  - [x] `internal/webauthn/webauthn.go`.
+  - [x] `internal/webauthn/converter.go`.
+  - [x] `internal/webauthn/client.go`.
+  - [x] `backend/v3/domain/passkey.go`.
+  - [x] `backend/v3/domain/session_challenge_passkey.go`.
+  - [x] `backend/v3/domain/session_check_passkey.go`.
+- [x] Replace Zitadel dependencies:
+  - [x] Replace `domain.Human` with Aether account and credential models.
+  - [x] Replace domain context and tracing with Aether logger/request context.
+  - [x] Replace `zerrors` with Aether service errors.
   - [ ] Replace Zitadel repositories with sqlc-backed repositories.
 - [ ] Implement registration flow:
   - [ ] Generate options.
@@ -440,9 +440,9 @@ session challenges.
   - [ ] Primary passkey login via `AuthMethod`.
   - [ ] MFA passkey verification through the shared factor model.
 - [ ] Port the virtual WebAuthn client test helper early:
-  - [ ] Registration without a browser.
-  - [ ] Assertion without a browser.
-  - [ ] Invalid challenge, replay, and sign-count regression cases.
+  - [x] Registration without a browser.
+  - [x] Assertion without a browser.
+  - [x] Invalid challenge, replay, and sign-count regression cases.
 
 Exit criteria:
 
