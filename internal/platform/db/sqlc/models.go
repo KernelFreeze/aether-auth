@@ -309,15 +309,18 @@ type SessionUserAgent struct {
 }
 
 type WebauthnCredential struct {
-	CredentialID    pgtype.UUID        `json:"credential_id"`
-	KeyID           []byte             `json:"key_id"`
-	PublicKey       []byte             `json:"public_key"`
-	SignCount       int32              `json:"sign_count"`
-	RelyingPartyID  string             `json:"relying_party_id"`
-	Aaguid          []byte             `json:"aaguid"`
-	AttestationType string             `json:"attestation_type"`
-	UserVerified    bool               `json:"user_verified"`
-	BackedUp        bool               `json:"backed_up"`
-	CreatedAt       pgtype.Timestamptz `json:"created_at"`
-	UpdatedAt       pgtype.Timestamptz `json:"updated_at"`
+	CredentialID            pgtype.UUID        `json:"credential_id"`
+	KeyID                   []byte             `json:"key_id"`
+	PublicKey               []byte             `json:"public_key"`
+	SignCount               int32              `json:"sign_count"`
+	RelyingPartyID          string             `json:"relying_party_id"`
+	Aaguid                  []byte             `json:"aaguid"`
+	AttestationType         string             `json:"attestation_type"`
+	UserVerified            bool               `json:"user_verified"`
+	BackedUp                bool               `json:"backed_up"`
+	CreatedAt               pgtype.Timestamptz `json:"created_at"`
+	UpdatedAt               pgtype.Timestamptz `json:"updated_at"`
+	Transports              []string           `json:"transports"`
+	BackupEligible          bool               `json:"backup_eligible"`
+	AuthenticatorAttachment string             `json:"authenticator_attachment"`
 }

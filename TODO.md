@@ -423,7 +423,7 @@ session challenges.
   - [x] Replace `domain.Human` with Aether account and credential models.
   - [x] Replace domain context and tracing with Aether logger/request context.
   - [x] Replace `zerrors` with Aether service errors.
-  - [ ] Replace Zitadel repositories with sqlc-backed repositories.
+  - [x] Replace Zitadel repositories with sqlc-backed repositories.
 - [ ] Implement registration flow:
   - [ ] Generate options.
   - [ ] Store single-use challenge with TTL.
