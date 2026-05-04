@@ -300,6 +300,75 @@ func TestAccountModuleTOTPRoutes(t *testing.T) {
 	}
 }
 
+func TestAccountModulePasskeyRegistrationRoutes(t *testing.T) {
+	accountID := mustCredentialAccountID(t, "018f1f74-10a1-7000-9000-000000000519")
+	sessionID := mustCredentialSessionID(t, "018f1f74-10a1-7000-9000-000000000520")
+	credentialID := mustCredentialCredentialID(t, "018f1f74-10a1-7000-9000-000000000521")
+	profiles := &fakeProfileManager{profile: AccountProfile{
+		ID:          accountID,
+		Username:    "celeste",
+		DisplayName: "Celeste Love",
+	}}
+	passkeys := &fakePasskeyManager{
+		begin: PasskeyRegistrationBegin{
+			ChallengeID: "018f1f74-10a1-7000-9000-000000000522",
+			Options:     json.RawMessage(`{"publicKey":{"challenge":"public-challenge","rp":{"id":"localhost"}}}`),
+			ExpiresAt:   time.Date(2026, 5, 3, 14, 0, 0, 0, time.UTC),
+		},
+		credential: PasskeyCredential{
+			ID:          credentialID,
+			AccountID:   accountID,
+			Kind:        CredentialKindWebAuthn,
+			DisplayName: "Laptop passkey",
+			Verified:    true,
+			CreatedAt:   time.Date(2026, 5, 3, 13, 59, 0, 0, time.UTC),
+		},
+	}
+	router := accountTestRouter(t, New(Deps{
+		Profiles: profiles,
+		Passkeys: passkeys,
+	}), authenticatedAsSession(accountID, sessionID, time.Time{}))
+
+	beginRec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodPost, "/account/passkeys/registration/options", map[string]any{
+		"user_verification":        "preferred",
+		"authenticator_attachment": "platform",
+	}))
+	if beginRec.Code != http.StatusCreated {
+		t.Fatalf("begin status = %d, want %d: %s", beginRec.Code, http.StatusCreated, beginRec.Body.String())
+	}
+	if passkeys.beginReq.AccountID != accountID || passkeys.beginReq.SessionID != sessionID || passkeys.beginReq.Username != "celeste" {
+		t.Fatalf("begin request = %#v", passkeys.beginReq)
+	}
+	var beginBody passkeyRegistrationOptionsResponse
+	testutil.DecodeJSON(t, beginRec.Body, &beginBody)
+	if beginBody.ChallengeID != passkeys.begin.ChallengeID || !strings.Contains(string(beginBody.Options), "public-challenge") {
+		t.Fatalf("begin response = %#v", beginBody)
+	}
+
+	finishRec := testutil.Record(router, testutil.NewJSONRequest(t, http.MethodPost, "/account/passkeys/registration/confirm", map[string]any{
+		"challenge_id":         passkeys.begin.ChallengeID,
+		"credential_name":      " Laptop passkey ",
+		"attestation_response": map[string]any{"id": "credential-response"},
+	}))
+	if finishRec.Code != http.StatusCreated {
+		t.Fatalf("finish status = %d, want %d: %s", finishRec.Code, http.StatusCreated, finishRec.Body.String())
+	}
+	if passkeys.finishReq.AccountID != accountID || passkeys.finishReq.SessionID != sessionID || passkeys.finishReq.CredentialName != "Laptop passkey" {
+		t.Fatalf("finish request = %#v", passkeys.finishReq)
+	}
+	body := finishRec.Body.String()
+	for _, forbidden := range []string{"public_key", "attestation_response", "private", "challenge"} {
+		if strings.Contains(body, forbidden) {
+			t.Fatalf("passkey credential response leaked %q: %s", forbidden, body)
+		}
+	}
+	var credential passkeyCredentialResponse
+	testutil.DecodeJSON(t, strings.NewReader(body), &credential)
+	if credential.CredentialID != credentialID.String() || credential.Kind != CredentialKindWebAuthn.String() || !credential.Verified {
+		t.Fatalf("credential response = %#v", credential)
+	}
+}
+
 func TestAccountModuleRequiresAuthentication(t *testing.T) {
 	router := accountTestRouter(t, New(Deps{Profiles: &fakeProfileManager{}}), func(c *gin.Context) {
 		c.Next()
@@ -438,6 +507,31 @@ func (m *fakeTOTPManager) GenerateRecoveryCodes(_ context.Context, req RecoveryC
 		return GeneratedRecoveryCodes{}, m.err
 	}
 	return m.recovery, nil
+}
+
+type fakePasskeyManager struct {
+	beginReq   PasskeyRegistrationBeginRequest
+	finishReq  PasskeyRegistrationFinishRequest
+	begin      PasskeyRegistrationBegin
+	credential PasskeyCredential
+	beginErr   error
+	finishErr  error
+}
+
+func (m *fakePasskeyManager) BeginPasskeyRegistration(_ context.Context, req PasskeyRegistrationBeginRequest) (PasskeyRegistrationBegin, error) {
+	m.beginReq = req
+	if m.beginErr != nil {
+		return PasskeyRegistrationBegin{}, m.beginErr
+	}
+	return m.begin, nil
+}
+
+func (m *fakePasskeyManager) FinishPasskeyRegistration(_ context.Context, req PasskeyRegistrationFinishRequest) (PasskeyCredential, error) {
+	m.finishReq = req
+	if m.finishErr != nil {
+		return PasskeyCredential{}, m.finishErr
+	}
+	return m.credential, nil
 }
 
 func mustCredentialSessionID(t testing.TB, value string) SessionID {

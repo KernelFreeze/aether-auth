@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -19,6 +20,7 @@ import (
 	"github.com/KernelFreeze/aether-auth/internal/auth"
 	"github.com/KernelFreeze/aether-auth/internal/auth/password"
 	"github.com/KernelFreeze/aether-auth/internal/auth/totp"
+	"github.com/KernelFreeze/aether-auth/internal/auth/webauthn"
 	"github.com/KernelFreeze/aether-auth/internal/httpapi"
 	"github.com/KernelFreeze/aether-auth/internal/mfa"
 	"github.com/KernelFreeze/aether-auth/internal/passwordreset"
@@ -110,6 +112,10 @@ func run() error {
 	if err != nil {
 		return err
 	}
+	passkeyService, err := newWebAuthnRegistrationService(cfg, pool, queries)
+	if err != nil {
+		return err
+	}
 	sessionStore := session.NewSQLStore(pool, queries)
 	sessionIssuer := session.NewService(session.ServiceDeps{
 		Store:       sessionStore,
@@ -141,6 +147,7 @@ func run() error {
 				}),
 				Sessions: sessionIssuer,
 				TOTP:     accountTOTPManager{service: totpService},
+				Passkeys: accountPasskeyManager{service: passkeyService},
 			}),
 			Auth: auth.New(auth.Deps{
 				Registration: account.NewRegistrationService(account.RegistrationDeps{
@@ -282,6 +289,42 @@ func newTOTPService(ctx context.Context, cfg *config.Config, sec secrets.Provide
 	}), nil
 }
 
+func newWebAuthnRegistrationService(cfg *config.Config, pool interface {
+	sqlc.DBTX
+	Begin(context.Context) (pgx.Tx, error)
+}, queries sqlc.Querier) (*webauthn.RegistrationService, error) {
+	server, err := webauthn.New(webauthn.Config{
+		RelyingPartyID:      cfg.WebAuthn.RelyingPartyID,
+		RelyingPartyName:    cfg.WebAuthn.RelyingPartyName,
+		RelyingPartyOrigins: cfg.WebAuthn.RelyingPartyOrigins,
+		UserVerification:    webAuthnUserVerification(cfg.WebAuthn.UserVerification),
+		LoginTimeout:        cfg.WebAuthn.LoginTimeout,
+		RegistrationTimeout: cfg.WebAuthn.RegistrationTimeout,
+		EnforceTimeouts:     cfg.WebAuthn.EnforceTimeouts,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return webauthn.NewRegistrationService(webauthn.RegistrationServiceDeps{
+		Server:       server,
+		Credentials:  webauthn.NewSQLCredentialStore(pool),
+		Challenges:   auth.NewSQLChallengeStore(queries, nil),
+		IDs:          auth.UUIDGenerator{},
+		ChallengeTTL: cfg.WebAuthn.RegistrationTimeout,
+	}), nil
+}
+
+func webAuthnUserVerification(value string) webauthn.UserVerificationRequirement {
+	switch strings.TrimSpace(value) {
+	case string(webauthn.UserVerificationRequired):
+		return webauthn.UserVerificationRequired
+	case string(webauthn.UserVerificationDiscouraged):
+		return webauthn.UserVerificationDiscouraged
+	default:
+		return webauthn.UserVerificationPreferred
+	}
+}
+
 type accountTOTPManager struct {
 	service *totp.Service
 }
@@ -334,6 +377,91 @@ func (m accountTOTPManager) GenerateRecoveryCodes(ctx context.Context, req accou
 		CredentialID: generated.CredentialID,
 		Codes:        append([]string(nil), generated.Codes...),
 	}, nil
+}
+
+type accountPasskeyManager struct {
+	service *webauthn.RegistrationService
+}
+
+func (m accountPasskeyManager) BeginPasskeyRegistration(ctx context.Context, req account.PasskeyRegistrationBeginRequest) (account.PasskeyRegistrationBegin, error) {
+	result, err := m.service.BeginRegistration(ctx, webauthn.RegistrationStartRequest{
+		AccountID:               req.AccountID,
+		SessionID:               req.SessionID,
+		Username:                req.Username,
+		DisplayName:             req.DisplayName,
+		RequestID:               req.RequestID,
+		UserVerification:        webAuthnUserVerification(req.UserVerification),
+		AuthenticatorAttachment: webAuthnAuthenticatorAttachment(req.AuthenticatorAttachment),
+	})
+	if err != nil {
+		return account.PasskeyRegistrationBegin{}, accountPasskeyError(err)
+	}
+	return account.PasskeyRegistrationBegin{
+		ChallengeID: result.ChallengeID,
+		Options:     append([]byte(nil), result.Options...),
+		ExpiresAt:   result.ExpiresAt,
+	}, nil
+}
+
+func (m accountPasskeyManager) FinishPasskeyRegistration(ctx context.Context, req account.PasskeyRegistrationFinishRequest) (account.PasskeyCredential, error) {
+	credential, err := m.service.FinishRegistration(ctx, webauthn.RegistrationCompleteRequest{
+		AccountID:           req.AccountID,
+		SessionID:           req.SessionID,
+		Username:            req.Username,
+		DisplayName:         req.DisplayName,
+		ChallengeID:         req.ChallengeID,
+		CredentialName:      req.CredentialName,
+		AttestationResponse: append([]byte(nil), req.AttestationResponse...),
+	})
+	if err != nil {
+		return account.PasskeyCredential{}, accountPasskeyError(err)
+	}
+	return account.PasskeyCredential{
+		ID:          credential.ID,
+		AccountID:   credential.AccountID,
+		Kind:        account.CredentialKindWebAuthn,
+		DisplayName: credential.DisplayName,
+		Verified:    credential.Verified,
+		CreatedAt:   credential.CreatedAt,
+	}, nil
+}
+
+func webAuthnAuthenticatorAttachment(value string) webauthn.AuthenticatorAttachment {
+	switch strings.TrimSpace(value) {
+	case string(webauthn.AuthenticatorAttachmentPlatform):
+		return webauthn.AuthenticatorAttachmentPlatform
+	case string(webauthn.AuthenticatorAttachmentCrossPlatform):
+		return webauthn.AuthenticatorAttachmentCrossPlatform
+	default:
+		return ""
+	}
+}
+
+func accountPasskeyError(err error) error {
+	switch {
+	case errors.Is(err, auth.ErrMalformedInput):
+		return account.ErrMalformedPasskey
+	case errors.Is(err, auth.ErrExpiredChallenge):
+		return account.ErrExpiredPasskeyChallenge
+	case errors.Is(err, auth.ErrReplayedChallenge):
+		return account.ErrReplayedPasskeyChallenge
+	case errors.Is(err, auth.ErrInvalidCredentials), errors.Is(err, auth.ErrLockedAccount):
+		return account.ErrInvalidPasskey
+	default:
+		if kind, ok := auth.ErrorKindOf(err); ok {
+			switch kind {
+			case auth.ErrorKindMalformedInput:
+				return account.ErrMalformedPasskey
+			case auth.ErrorKindExpiredChallenge:
+				return account.ErrExpiredPasskeyChallenge
+			case auth.ErrorKindReplayedChallenge:
+				return account.ErrReplayedPasskeyChallenge
+			case auth.ErrorKindInvalidCredentials, auth.ErrorKindLockedAccount:
+				return account.ErrInvalidPasskey
+			}
+		}
+		return err
+	}
 }
 
 func accountMFAError(err error) error {

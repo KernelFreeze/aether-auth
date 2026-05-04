@@ -14,6 +14,7 @@ type Deps struct {
 	Credentials CredentialManager
 	Sessions    AccountSessionManager
 	TOTP        TOTPManager
+	Passkeys    PasskeyManager
 }
 
 // ProfileManager is the profile service surface used by HTTP handlers.
@@ -42,12 +43,20 @@ type TOTPManager interface {
 	GenerateRecoveryCodes(context.Context, RecoveryCodeGenerateRequest) (GeneratedRecoveryCodes, error)
 }
 
+// PasskeyManager owns WebAuthn passkey registration for account settings
+// routes.
+type PasskeyManager interface {
+	BeginPasskeyRegistration(context.Context, PasskeyRegistrationBeginRequest) (PasskeyRegistrationBegin, error)
+	FinishPasskeyRegistration(context.Context, PasskeyRegistrationFinishRequest) (PasskeyCredential, error)
+}
+
 // Module owns account and credential HTTP handlers.
 type Module struct {
 	profiles    profileManager
 	credentials credentialManager
 	sessions    accountSessionManager
 	totp        TOTPManager
+	passkeys    PasskeyManager
 }
 
 type profileManager interface {
@@ -74,6 +83,7 @@ func New(deps Deps) *Module {
 		credentials: deps.Credentials,
 		sessions:    deps.Sessions,
 		totp:        deps.TOTP,
+		passkeys:    deps.Passkeys,
 	}
 }
 
@@ -96,4 +106,6 @@ func (m *Module) RegisterRoutes(r gin.IRouter, mw httpapi.Middlewares) {
 	protected.POST("/mfa/totp/confirm", m.handleConfirmTOTP)
 	protected.DELETE("/mfa/totp/:credential_id", m.handleDisableTOTP)
 	protected.POST("/mfa/recovery-codes/regenerate", m.handleRegenerateRecoveryCodes)
+	protected.POST("/passkeys/registration/options", m.handleBeginPasskeyRegistration)
+	protected.POST("/passkeys/registration/confirm", m.handleFinishPasskeyRegistration)
 }

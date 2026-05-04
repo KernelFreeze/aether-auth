@@ -71,6 +71,15 @@ oauth:
   default_scopes: ["openid", "profile"]
   require_pkce: true
 
+webauthn:
+  relying_party_id: "localhost"
+  relying_party_name: "Aether Auth"
+  relying_party_origins: ["http://localhost:8080"]
+  user_verification: "preferred"
+  registration_timeout: "60s"
+  login_timeout: "60s"
+  enforce_timeouts: true
+
 ratelimits:
   ip_per_min: 100
   account_per_min: 10

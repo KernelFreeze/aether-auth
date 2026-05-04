@@ -353,12 +353,14 @@ func accountErrorID(code string) string {
 		return "ACCOUNT-0006"
 	case "reauthentication_required":
 		return "ACCOUNT-0007"
-	case "authentication_not_configured", "profile_not_configured", "credentials_not_configured", "sessions_not_configured":
+	case "authentication_not_configured", "profile_not_configured", "credentials_not_configured", "sessions_not_configured", "passkey_not_configured":
 		return "ACCOUNT-0008"
 	case "invalid_session", "invalid_session_id":
 		return "ACCOUNT-0010"
 	case "session_not_found":
 		return "ACCOUNT-0011"
+	case "invalid_passkey", "invalid_passkey_request", "expired_passkey_challenge", "replayed_passkey_challenge":
+		return "ACCOUNT-0012"
 	default:
 		return "ACCOUNT-0009"
 	}

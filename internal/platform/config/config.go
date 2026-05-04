@@ -26,6 +26,7 @@ type Config struct {
 	PASETO        PASETOConfig
 	OAuth         OAuthServerConfig
 	OIDC          OIDCConfig
+	WebAuthn      WebAuthnConfig
 	RateLimits    RateLimitConfig
 	Lockout       LockoutConfig
 	PasswordReset PasswordResetConfig
@@ -155,6 +156,17 @@ type OAuthServerConfig struct {
 // fills in, since each value also needs to flow through secrets.Provider.
 type OIDCConfig struct {
 	EnabledProviders []string `env:"OIDC_PROVIDERS"`
+}
+
+// WebAuthnConfig configures the relying party used for passkey ceremonies.
+type WebAuthnConfig struct {
+	RelyingPartyID      string        `env:"WEBAUTHN_RP_ID, default=localhost"`
+	RelyingPartyName    string        `env:"WEBAUTHN_RP_NAME, default=Aether Auth"`
+	RelyingPartyOrigins []string      `env:"WEBAUTHN_RP_ORIGINS, default=http://localhost:8080"`
+	UserVerification    string        `env:"WEBAUTHN_USER_VERIFICATION, default=preferred"`
+	RegistrationTimeout time.Duration `env:"WEBAUTHN_REGISTRATION_TIMEOUT, default=60s"`
+	LoginTimeout        time.Duration `env:"WEBAUTHN_LOGIN_TIMEOUT, default=60s"`
+	EnforceTimeouts     bool          `env:"WEBAUTHN_ENFORCE_TIMEOUTS, default=true"`
 }
 
 // RateLimitConfig configures per-IP, per-account, and per-endpoint buckets.

@@ -53,8 +53,11 @@ layer, not the fast `just test` unit gate.
 - [ ] Stage 8 Hurl flow: WebAuthn HTTP contract.
   - [ ] Keep successful registration/assertion coverage in Go e2e tests with
     the adapted virtual WebAuthn client.
-  - [ ] Use Hurl for challenge response shape, malformed payloads, expired
-    challenge, and replay rejection once those routes exist.
+  - [x] Use Hurl for account-owned passkey registration challenge response
+    shape and malformed finish payloads once registration routes exist.
+  - [ ] Add expired-challenge and replay-rejection Hurl coverage once a
+    browserless e2e client or seeded challenge helper can finish ceremonies
+    over HTTP.
 - [ ] Stage 9 Hurl flow: external OIDC callback behavior.
   - [ ] Run authorize and callback paths against a local mock provider.
   - [ ] Assert redirect, state, nonce, PKCE, provider-error, and auto-create
@@ -424,11 +427,11 @@ session challenges.
   - [x] Replace domain context and tracing with Aether logger/request context.
   - [x] Replace `zerrors` with Aether service errors.
   - [x] Replace Zitadel repositories with sqlc-backed repositories.
-- [ ] Implement registration flow:
-  - [ ] Generate options.
-  - [ ] Store single-use challenge with TTL.
-  - [ ] Verify attestation response.
-  - [ ] Persist credential ID, public key, AAGUID, attestation type, sign
+- [x] Implement registration flow:
+  - [x] Generate options.
+  - [x] Store single-use challenge with TTL.
+  - [x] Verify attestation response.
+  - [x] Persist credential ID, public key, AAGUID, attestation type, sign
     count, relying party ID, user verification state, and display name.
 - [ ] Implement login flow:
   - [ ] Generate assertion options.
@@ -447,7 +450,7 @@ session challenges.
 Exit criteria:
 
 - [ ] Passkey registration and login work in tests.
-- [ ] Challenge replay is rejected.
+- [x] Challenge replay is rejected.
 - [ ] WebAuthn can satisfy MFA without special-case orchestration code.
 
 ## Stage 9: External OIDC login using Zitadel reuse
