@@ -241,16 +241,5 @@ func (s *RegistrationService) now() time.Time {
 }
 
 func registrationUser(accountID account.AccountID, username, displayName string) (User, error) {
-	if accountID.IsZero() {
-		return User{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "webauthn account id is required", nil)
-	}
-	username = strings.TrimSpace(username)
-	if username == "" {
-		return User{}, auth.NewServiceError(auth.ErrorKindMalformedInput, "webauthn username is required", nil)
-	}
-	return User{
-		AccountID:   accountID,
-		Username:    username,
-		DisplayName: strings.TrimSpace(displayName),
-	}, nil
+	return ceremonyUser(accountID, username, displayName)
 }

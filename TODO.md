@@ -433,12 +433,12 @@ session challenges.
   - [x] Verify attestation response.
   - [x] Persist credential ID, public key, AAGUID, attestation type, sign
     count, relying party ID, user verification state, and display name.
-- [ ] Implement login flow:
-  - [ ] Generate assertion options.
-  - [ ] Store single-use challenge with TTL.
-  - [ ] Verify assertion.
-  - [ ] Update sign count.
-  - [ ] Detect clone warning and emit audit event.
+- [x] Implement login flow:
+  - [x] Generate assertion options.
+  - [x] Store single-use challenge with TTL.
+  - [x] Verify assertion.
+  - [x] Update sign count.
+  - [x] Detect clone warning and emit audit event.
 - [ ] Implement WebAuthn as both primary auth and second factor:
   - [ ] Primary passkey login via `AuthMethod`.
   - [ ] MFA passkey verification through the shared factor model.
@@ -449,7 +449,7 @@ session challenges.
 
 Exit criteria:
 
-- [ ] Passkey registration and login work in tests.
+- [x] Passkey registration and login work in tests.
 - [x] Challenge replay is rejected.
 - [ ] WebAuthn can satisfy MFA without special-case orchestration code.
 
